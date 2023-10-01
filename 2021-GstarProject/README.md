@@ -29,16 +29,16 @@
 
     #### 코드 목록
     - 생명체 관련 추상 클래스 작성
-      https://github.com/hyeon0316/GstarProject/blob/16ef81b3f7db8d3092750e0b99d95c0f2cd29d9e/Assets/Enemy/Scripts/LivingEntity.cs#L8-L44
+      https://github.com/hyeon0316/Project-Code-Repository/blob/c29783b846546b74bf885ebbc98efbd5b287574f/2021-GstarProject/Scripts/Enemy/LivingEntity.cs#L8-L43
       <br/>
     - 캐릭터 머리 위 HpBar 구현
-      https://github.com/hyeon0316/GstarProject/blob/16ef81b3f7db8d3092750e0b99d95c0f2cd29d9e/Assets/Enemy/Scripts/EnemyHpBar.cs#L6-L37
+      https://github.com/hyeon0316/Project-Code-Repository/blob/c29783b846546b74bf885ebbc98efbd5b287574f/2021-GstarProject/Scripts/Enemy/EnemyHpBar.cs#L6-L37
       <br/>
     - ScriptableObject를 사용 하여 데이터 관리
-      https://github.com/hyeon0316/GstarProject/blob/16ef81b3f7db8d3092750e0b99d95c0f2cd29d9e/Assets/InvenTory/Scripts/UIScripts/Item.cs#L5-L35
+      https://github.com/hyeon0316/Project-Code-Repository/blob/c29783b846546b74bf885ebbc98efbd5b287574f/2021-GstarProject/Scripts/Inventory/Item.cs#L5-L35
       <br/>
     - 아이템 획득 
-      https://github.com/hyeon0316/GstarProject/blob/16ef81b3f7db8d3092750e0b99d95c0f2cd29d9e/Assets/InvenTory/Scripts/UIScripts/Inventory.cs#L74-L121
+      https://github.com/hyeon0316/Project-Code-Repository/blob/c29783b846546b74bf885ebbc98efbd5b287574f/2021-GstarProject/Scripts/Inventory/Inventory.cs#L74-L121
       <br/>
     - 아이템 클릭, 드래그, 드롭
       https://github.com/hyeon0316/GstarProject/blob/16ef81b3f7db8d3092750e0b99d95c0f2cd29d9e/Assets/InvenTory/Scripts/UIScripts/Slot.cs#L109-L140
