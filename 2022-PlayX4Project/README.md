@@ -33,25 +33,20 @@
 
     #### 코드 목록
     - json 데이터 파싱
-      https://github.com/hyeon0316/PlayX4Project/blob/8ced253073a2a4365599aaa2053c2676fc5f4d15/Assets/Scripts/Manager/DataManager.cs#L8-L71
+      https://github.com/hyeon0316/Project-Code-Repository/blob/cd8f4c55166b0f1af90b5fd4822ef1ce2dd77efb/2022-PlayX4Project/Scripts/Manager/DataManager.cs#L8-L71
       <br/>
     - 스토리 진행 관리
-      https://github.com/hyeon0316/PlayX4Project/blob/8ced253073a2a4365599aaa2053c2676fc5f4d15/Assets/Scripts/Manager/DialogueManager.cs#L99-L151
+      https://github.com/hyeon0316/Project-Code-Repository/blob/cd8f4c55166b0f1af90b5fd4822ef1ce2dd77efb/2022-PlayX4Project/Scripts/Manager/DialogueManager.cs#L99-L151
       <br/>
     - 상호작용 구조물 추상클래스 작성
-      https://github.com/hyeon0316/PlayX4Project/blob/8ced253073a2a4365599aaa2053c2676fc5f4d15/Assets/Scripts/Interaction/Interaction.cs#L6-L41
-      <br/>
-    - 인터페이스 사용하여 재정의
-      https://github.com/hyeon0316/PlayX4Project/blob/8ced253073a2a4365599aaa2053c2676fc5f4d15/Assets/Scripts/Fade/IFade.cs#L1-L5
-      https://github.com/hyeon0316/PlayX4Project/blob/8ced253073a2a4365599aaa2053c2676fc5f4d15/Assets/Scripts/Fade/FadeImage.cs#L6-L57
+      https://github.com/hyeon0316/Project-Code-Repository/blob/cd8f4c55166b0f1af90b5fd4822ef1ce2dd77efb/2022-PlayX4Project/Scripts/Interaction/Interaction.cs#L6-L41
       <br/>
     - 오브젝트 풀(자료구조 Queue로 관리)
-      https://github.com/hyeon0316/PlayX4Project/blob/8ced253073a2a4365599aaa2053c2676fc5f4d15/Assets/Scripts/Life/Enemy/Demon.cs#L93-L153
+      https://github.com/hyeon0316/Project-Code-Repository/blob/cd8f4c55166b0f1af90b5fd4822ef1ce2dd77efb/2022-PlayX4Project/Scripts/Life/Enemy/Demon.cs#L93-L153
       <br/>
     - 재귀함수를 사용한 랜덤 패턴
-      https://github.com/hyeon0316/PlayX4Project/blob/8ced253073a2a4365599aaa2053c2676fc5f4d15/Assets/Scripts/Life/Enemy/Necromancer.cs#L80-L116
+      https://github.com/hyeon0316/Project-Code-Repository/blob/cd8f4c55166b0f1af90b5fd4822ef1ce2dd77efb/2022-PlayX4Project/Scripts/Life/Enemy/Necromancer.cs#L80-L116
       <br/>
-    - 필요한 콜리더만 활성화
-      https://github.com/hyeon0316/PlayX4Project/blob/d68b8db2ec14ecb6a429b6b3b7a19b9831a6fd6b/Assets/Scripts/Manager/GameManager.cs#L29-L40
+   
       
       
