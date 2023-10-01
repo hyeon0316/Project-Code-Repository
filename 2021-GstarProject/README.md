@@ -46,7 +46,7 @@
       https://github.com/hyeon0316/Project-Code-Repository/blob/c29783b846546b74bf885ebbc98efbd5b287574f/2021-GstarProject/Scripts/Inventory/Slot.cs#L142-L230
       <br/>
     - 코루틴을 활용한 패턴 
-      https://github.com/hyeon0316/Project-Code-https://github.com/hyeon0316/Project-Code-Repository/blob/c29783b846546b74bf885ebbc98efbd5b287574f/2021-GstarProject/Scripts/Enemy/Boss.cs#L148-L187
+     https://github.com/hyeon0316/Project-Code-Repository/blob/c29783b846546b74bf885ebbc98efbd5b287574f/2021-GstarProject/Scripts/Enemy/Boss.cs#L148-L187
       
       
       
