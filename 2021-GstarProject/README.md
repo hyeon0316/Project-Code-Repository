@@ -41,12 +41,12 @@
       https://github.com/hyeon0316/Project-Code-Repository/blob/c29783b846546b74bf885ebbc98efbd5b287574f/2021-GstarProject/Scripts/Inventory/Inventory.cs#L74-L121
       <br/>
     - 아이템 클릭, 드래그, 드롭
-      https://github.com/hyeon0316/GstarProject/blob/16ef81b3f7db8d3092750e0b99d95c0f2cd29d9e/Assets/InvenTory/Scripts/UIScripts/Slot.cs#L109-L140
-      https://github.com/hyeon0316/GstarProject/blob/16ef81b3f7db8d3092750e0b99d95c0f2cd29d9e/Assets/InvenTory/Scripts/UIScripts/Slot.cs#L232-L247
-      https://github.com/hyeon0316/GstarProject/blob/16ef81b3f7db8d3092750e0b99d95c0f2cd29d9e/Assets/InvenTory/Scripts/UIScripts/Slot.cs#L142-L230
+      https://github.com/hyeon0316/Project-Code-Repository/blob/f7005ad12d9b81875a7bcac90670b0d4d7cfdff3/2021-GstarProject/Scripts/Inventory/Slot.cs#L109-L140
+      https://github.com/hyeon0316/Project-Code-Repository/blob/c29783b846546b74bf885ebbc98efbd5b287574f/2021-GstarProject/Scripts/Inventory/Slot.cs#L232-L247
+      https://github.com/hyeon0316/Project-Code-Repository/blob/c29783b846546b74bf885ebbc98efbd5b287574f/2021-GstarProject/Scripts/Inventory/Slot.cs#L142-L230
       <br/>
     - 코루틴을 활용한 패턴 
-      https://github.com/hyeon0316/GstarProject/blob/16ef81b3f7db8d3092750e0b99d95c0f2cd29d9e/Assets/Enemy/Scripts/Boss.cs#L148-L187
+      https://github.com/hyeon0316/Project-Code-https://github.com/hyeon0316/Project-Code-Repository/blob/c29783b846546b74bf885ebbc98efbd5b287574f/2021-GstarProject/Scripts/Enemy/Boss.cs#L148-L187
       
       
       
