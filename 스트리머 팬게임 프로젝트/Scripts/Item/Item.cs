@@ -409,11 +409,6 @@ public abstract class Item : MonoBehaviour, IDragHandler, IBeginDragHandler, IEn
         Destroy(this.gameObject);
     }
 
-    private void EndDrag_Combination()
-    {
-
-    }
-
 
     /// <summary>
     /// 업그레이드 가능한지(아이템코드와, 업그레이드 성이 같은지) 확인, 3성이 아닌지 확인
