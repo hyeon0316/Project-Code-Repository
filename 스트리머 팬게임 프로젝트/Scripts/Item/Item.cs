@@ -39,7 +39,7 @@ public abstract class Item : MonoBehaviour, IDragHandler, IBeginDragHandler, IEn
     /// <summary>
     /// 아이템 설명
     /// </summary>
-    [SerializeField] [TextArea] private string _description;
+    [SerializeField][TextArea] private string _description;
 
     /// <summary>
     /// 효과 설명
@@ -78,7 +78,7 @@ public abstract class Item : MonoBehaviour, IDragHandler, IBeginDragHandler, IEn
     {
         CancelDrag();
     }
-    
+
     public void SetActiveStarObject()
     {
         int count = 0;
@@ -88,7 +88,7 @@ public abstract class Item : MonoBehaviour, IDragHandler, IBeginDragHandler, IEn
 
         if (Upgrade == 0)
             return;
-        
+
         foreach (var star in _starObjects)
         {
             if (count <= Upgrade)
@@ -115,13 +115,13 @@ public abstract class Item : MonoBehaviour, IDragHandler, IBeginDragHandler, IEn
 
     public abstract void SetEquipEffectText();
 
-    protected virtual void ShowEquipEffectPanel() {}
+    protected virtual void ShowEquipEffectPanel() { }
 
     /// <summary>
     /// 아이템 효과 사용
     /// </summary>
     public abstract void Active(BattleCharacter player, BattleCharacter opponent);
-    
+
 
     /// <summary>
     /// 전투단계로 전환될때 드래그 중이었던 아이템을 다시 원래 자리로 옮김
@@ -130,7 +130,7 @@ public abstract class Item : MonoBehaviour, IDragHandler, IBeginDragHandler, IEn
     {
         if (_isDrag)
         {
-            if (WindowManager.Instance.GetInGame().ReadyWindow.ReadyTimer == 0 
+            if (WindowManager.Instance.GetInGame().ReadyWindow.ReadyTimer == 0
                 || Input.GetKeyDown(KeyCode.Q) || Input.GetKeyDown(KeyCode.E))
             {
                 RePosItem(_originParent, _originParent.position);
@@ -141,11 +141,11 @@ public abstract class Item : MonoBehaviour, IDragHandler, IBeginDragHandler, IEn
             }
         }
     }
-    
-    
+
+
     public void OnPointerClick(PointerEventData eventData) //필드에 있는 아이템 설명 표시
     {
-        if(eventData.button == PointerEventData.InputButton.Right)
+        if (eventData.button == PointerEventData.InputButton.Right)
         {
             Vector2 pos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
             Ray2D ray = new Ray2D(pos, Vector2.zero);
@@ -159,7 +159,7 @@ public abstract class Item : MonoBehaviour, IDragHandler, IBeginDragHandler, IEn
             }
         }
     }
-    
+
     public void OnPointerEnter(PointerEventData eventData)
     {
         if (!IsAlphaZero())
@@ -229,7 +229,7 @@ public abstract class Item : MonoBehaviour, IDragHandler, IBeginDragHandler, IEn
                 pos = Camera.main.ScreenToWorldPoint(pos); //마우스 좌표를 월드 좌표(카메라 안)로 변환
                 transform.position = new Vector3(pos.x, pos.y, 0);
 
-            
+
             }
         }
     }
@@ -252,151 +252,168 @@ public abstract class Item : MonoBehaviour, IDragHandler, IBeginDragHandler, IEn
     /// </summary>
     private void EndDragEvent()
     {
-        if (InGame.CurGameType == EGameType.Ready)
+        if (InGame.CurGameType != EGameType.Ready)
         {
-            Vector2 pos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            Ray2D ray = new Ray2D(pos, Vector2.zero);
-            RaycastHit2D hit = Physics2D.Raycast(ray.origin, ray.direction, Mathf.Infinity,
-                LayerMask.GetMask("ItemSlot", "Drop", "CombinationSlot"));
+            return;
+        }
 
-            if (hit.collider != null)
+        Vector2 pos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+        Ray2D ray = new Ray2D(pos, Vector2.zero);
+        RaycastHit2D hit = Physics2D.Raycast(ray.origin, ray.direction, Mathf.Infinity,
+            LayerMask.GetMask("ItemSlot", "Drop", "CombinationSlot"));
+
+        if (hit.collider != null)
+        {
+            if (hit.transform.gameObject.layer == LayerMask.NameToLayer("ItemSlot")) //슬롯칸에 드래그 했을 때
             {
-                if (hit.transform.gameObject.layer == LayerMask.NameToLayer("ItemSlot")) //슬롯칸에 드래그 했을 때
+                DragItemSlot(hit);
+            }
+            else if (hit.transform.gameObject.layer == LayerMask.NameToLayer("Drop")) //아이템을 버릴때
+            {
+                DropItem();
+            }
+            else if (hit.transform.gameObject.layer == LayerMask.NameToLayer("CombinationSlot")) //재조합 슬롯에 드래그 했을 때
+            {
+                RePosItem(_originParent, _originPos);
+                hit.transform.GetComponent<CombinationSlot>().SetSlotItem((Byte)_slotIndex1, _image.sprite);
+            }
+        }
+        else //아무것도 없는 공간에 드래그 했을 때
+        {
+            SoundManager.Instance.PlayEffect(EffectType.ItemDragEnd);
+            RePosItem(_originParent, _originPos);
+        }
+
+        _image.raycastTarget = true;
+    }
+
+    private void DragItemSlot(RaycastHit2D hit)
+    {
+        ItemSlot slot = hit.collider.GetComponent<ItemSlot>();
+        _slotIndex2 = slot.GetSlotIndex();
+
+        Player player = PlayerManager.Instance.Players[0];
+
+        if (_slotIndex2 < 6) //Using슬롯
+        {
+            if (slot.IsExistItem()) //아이템이 존재하는 슬롯에 놓을때
+            {
+                if (player.UsingInventory.CheckDuplicationItem(Code)) //Using인벤에 놓았을때 중복 아이템이면 
                 {
-                    ItemSlot slot = hit.collider.GetComponent<ItemSlot>();
-                    _slotIndex2 = slot.GetSlotIndex();
-
-                    Player player = PlayerManager.Instance.Players[0];
-
-                    if (_slotIndex2 < 6) //Using슬롯
+                    RePosItem(_originParent, _originPos);
+                    if (CheckUpgradeCondition(slot.GetItem().Code, slot.GetItem().Upgrade)) //업그레이드
                     {
-                        if (slot.IsExistItem()) //아이템이 존재하는 슬롯에 놓을때
+                        if (_slotIndex1 == _slotIndex2) //자기 자신은 업그레이드 불가
                         {
-                            if (player.UsingInventory.CheckDuplicationItem(Code)) //Using인벤에 놓았을때 중복 아이템이면 
-                            {
-                                RePosItem(_originParent, _originPos);
-                                if (CheckUpgradeCondition(slot.GetItem().Code, slot.GetItem().Upgrade)) //업그레이드
-                                {
-                                    if (_slotIndex1 == _slotIndex2) //자기 자신은 업그레이드 불가
-                                    {
-                                        _image.raycastTarget = true;
-                                        return;
-                                    }
-
-                                    SoundManager.Instance.PlayEffect(Upgrade == 0 ? EffectType.Upgrade : EffectType.Upgrade2); 
-                                    SetAlpha(0);
-                                    NetworkManager.Instance.SendUpgradeItemPacket(player.ID, (Byte) _slotIndex1, (Byte) _slotIndex2);
-                                    WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte) _slotIndex1);
-                                    WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte) _slotIndex2);
-                                }
-                                else //업그레이드 불가
-                                {
-                                    if (CheckEqualsItem(slot.GetItem().Code)) // 같은 아이템이지만 업그레이드 단계가 다를 경우
-                                    {
-                                        SoundManager.Instance.PlayEffect(EffectType.ItemDragEnd);
-                                        SetAlpha(0);
-                                        NetworkManager.Instance.SendChangeItemSlotPacket(player.ID, (Byte) _slotIndex1, (Byte) _slotIndex2);
-                                        WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte) _slotIndex1);
-                                        WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte) _slotIndex2);
-                                        
-                                        PlayerManager.Instance.GetPlayer(player.ID).SwapItemNetwork((Byte) _slotIndex1, (Byte) _slotIndex2);
-                                    }
-                                    else //취소
-                                    {
-                                        SoundManager.Instance.PlayEffect(EffectType.ItemDragEnd);
-                                    }
-                                }
-                            }
-                            else // 자리 변경
-                            {
-                                RePosItem(_originParent, _originPos);
-                                SoundManager.Instance.PlayEffect(EffectType.ItemDragEnd);
-                                SetAlpha(0);
-                                NetworkManager.Instance.SendChangeItemSlotPacket(player.ID, (Byte) _slotIndex1, (Byte) _slotIndex2);
-                                WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte) _slotIndex1);
-                                WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte) _slotIndex2);
-                                PlayerManager.Instance.GetPlayer(player.ID).SwapItemNetwork((Byte) _slotIndex1, (Byte) _slotIndex2);
-                            }
+                            _image.raycastTarget = true;
+                            return;
                         }
-                        else //아이템이 없는 슬롯에 놓을때
-                        {
-                            if (player.UsingInventory.CheckDuplicationItem(Code)) //Using인벤에 놓았을때 중복 아이템이면 
-                            {
-                                RePosItem(_originParent, _originPos);
-                                _image.raycastTarget = true;
-                                return;
-                            }
 
-                            SoundManager.Instance.PlayEffect(EffectType.ItemDragEnd);
-                            RePosItem(_originParent, _originPos);
-                            SetAlpha(0);
-                            NetworkManager.Instance.SendChangeItemSlotPacket(player.ID, (Byte) _slotIndex1, (Byte) _slotIndex2);
-                            WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte) _slotIndex1);
-                            WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte) _slotIndex2);
-                            PlayerManager.Instance.GetPlayer(player.ID).SwapItemNetwork((Byte) _slotIndex1, (Byte) _slotIndex2);
-                        }
-                    }
-                    else //UnUsing 슬롯
-                    {
+                        SoundManager.Instance.PlayEffect(Upgrade == 0 ? EffectType.Upgrade : EffectType.Upgrade2);
                         SetAlpha(0);
-                        RePosItem(_originParent, _originPos);
-                        WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte) _slotIndex1);
-                        WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte) _slotIndex2);
-                        if (slot.IsExistItem()) //아이템이 존재할때
-                        {
-                            if (CheckUpgradeCondition(slot.GetItem().Code, slot.GetItem().Upgrade)) //업그레이드 할때
-                            {
-                                if (_slotIndex1 == _slotIndex2) //자기 자신은 업그레이드 불가
-                                {
-                                    SetAlpha(1);
-                                    _image.raycastTarget = true;
-                                    return;
-                                }
-
-                                SoundManager.Instance.PlayEffect(Upgrade == 0 ? EffectType.Upgrade : EffectType.Upgrade2);
-                                NetworkManager.Instance.SendUpgradeItemPacket(player.ID, (Byte) _slotIndex1, (Byte) _slotIndex2);
-                                PlayerManager.Instance.GetPlayer(player.ID).SwapItemNetwork((Byte) _slotIndex1, (Byte) _slotIndex2);
-                            }
-                            else // 자리 변경
-                            {
-                                SoundManager.Instance.PlayEffect(EffectType.ItemDragEnd);
-                                NetworkManager.Instance.SendChangeItemSlotPacket(player.ID, (Byte) _slotIndex1, (Byte) _slotIndex2);
-                                PlayerManager.Instance.GetPlayer(player.ID).SwapItemNetwork((Byte) _slotIndex1, (Byte) _slotIndex2);
-                            }
-                        }
-                        else // 아이템이 없는 슬롯에 놓을때
+                        NetworkManager.Instance.SendUpgradeItemPacket(player.ID, (Byte)_slotIndex1, (Byte)_slotIndex2);
+                        WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte)_slotIndex1);
+                        WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte)_slotIndex2);
+                    }
+                    else //업그레이드 불가
+                    {
+                        if (CheckEqualsItem(slot.GetItem().Code)) // 같은 아이템이지만 업그레이드 단계가 다를 경우
                         {
                             SoundManager.Instance.PlayEffect(EffectType.ItemDragEnd);
-                            NetworkManager.Instance.SendChangeItemSlotPacket(player.ID, (Byte) _slotIndex1, (Byte) _slotIndex2);
-                            PlayerManager.Instance.GetPlayer(player.ID).SwapItemNetwork((Byte) _slotIndex1, (Byte) _slotIndex2);
+                            SetAlpha(0);
+                            NetworkManager.Instance.SendChangeItemSlotPacket(player.ID, (Byte)_slotIndex1, (Byte)_slotIndex2);
+                            WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte)_slotIndex1);
+                            WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte)_slotIndex2);
+
+                            PlayerManager.Instance.GetPlayer(player.ID).SwapItemNetwork((Byte)_slotIndex1, (Byte)_slotIndex2);
+                        }
+                        else //취소
+                        {
+                            SoundManager.Instance.PlayEffect(EffectType.ItemDragEnd);
                         }
                     }
                 }
-                else if (hit.transform.gameObject.layer == LayerMask.NameToLayer("Drop")) //아이템을 버릴때
+                else // 자리 변경
                 {
-                    SoundManager.Instance.PlayEffect(EffectType.ItemDrop);
+                    RePosItem(_originParent, _originPos);
+                    SoundManager.Instance.PlayEffect(EffectType.ItemDragEnd);
                     SetAlpha(0);
-                    RePosItem(_originParent, _originPos);
-                    NetworkManager.Instance.SendDropItemPacket(PlayerManager.Instance.Players[0].ID, (Byte) _slotIndex1);
-                    WindowManager.Instance.GetInGame().ReadyWindow.Drop.SetCloseSprite();
-                    Destroy(this.gameObject);
-                }
-                else if (hit.transform.gameObject.layer == LayerMask.NameToLayer("CombinationSlot")) //재조합 슬롯에 드래그 했을 때
-                {
-                    RePosItem(_originParent, _originPos);
-                    hit.transform.GetComponent<CombinationSlot>().SetSlotItem((Byte) _slotIndex1, _image.sprite);
+                    NetworkManager.Instance.SendChangeItemSlotPacket(player.ID, (Byte)_slotIndex1, (Byte)_slotIndex2);
+                    WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte)_slotIndex1);
+                    WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte)_slotIndex2);
+                    PlayerManager.Instance.GetPlayer(player.ID).SwapItemNetwork((Byte)_slotIndex1, (Byte)_slotIndex2);
                 }
             }
-            else //아무것도 없는 공간에 드래그 했을 때
+            else //아이템이 없는 슬롯에 놓을때
             {
+                if (player.UsingInventory.CheckDuplicationItem(Code)) //Using인벤에 놓았을때 중복 아이템이면 
+                {
+                    RePosItem(_originParent, _originPos);
+                    _image.raycastTarget = true;
+                    return;
+                }
+
                 SoundManager.Instance.PlayEffect(EffectType.ItemDragEnd);
                 RePosItem(_originParent, _originPos);
+                SetAlpha(0);
+                NetworkManager.Instance.SendChangeItemSlotPacket(player.ID, (Byte)_slotIndex1, (Byte)_slotIndex2);
+                WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte)_slotIndex1);
+                WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte)_slotIndex2);
+                PlayerManager.Instance.GetPlayer(player.ID).SwapItemNetwork((Byte)_slotIndex1, (Byte)_slotIndex2);
             }
+        }
+        else //UnUsing 슬롯
+        {
+            SetAlpha(0);
+            RePosItem(_originParent, _originPos);
+            WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte)_slotIndex1);
+            WindowManager.Instance.GetInGame().ReadyWindow.ReCombination.CheckDuplicationIndex((Byte)_slotIndex2);
+            if (slot.IsExistItem()) //아이템이 존재할때
+            {
+                if (CheckUpgradeCondition(slot.GetItem().Code, slot.GetItem().Upgrade)) //업그레이드 할때
+                {
+                    if (_slotIndex1 == _slotIndex2) //자기 자신은 업그레이드 불가
+                    {
+                        SetAlpha(1);
+                        _image.raycastTarget = true;
+                        return;
+                    }
 
-            _image.raycastTarget = true;
+                    SoundManager.Instance.PlayEffect(Upgrade == 0 ? EffectType.Upgrade : EffectType.Upgrade2);
+                    NetworkManager.Instance.SendUpgradeItemPacket(player.ID, (Byte)_slotIndex1, (Byte)_slotIndex2);
+                    PlayerManager.Instance.GetPlayer(player.ID).SwapItemNetwork((Byte)_slotIndex1, (Byte)_slotIndex2);
+                }
+                else // 자리 변경
+                {
+                    SoundManager.Instance.PlayEffect(EffectType.ItemDragEnd);
+                    NetworkManager.Instance.SendChangeItemSlotPacket(player.ID, (Byte)_slotIndex1, (Byte)_slotIndex2);
+                    PlayerManager.Instance.GetPlayer(player.ID).SwapItemNetwork((Byte)_slotIndex1, (Byte)_slotIndex2);
+                }
+            }
+            else // 아이템이 없는 슬롯에 놓을때
+            {
+                SoundManager.Instance.PlayEffect(EffectType.ItemDragEnd);
+                NetworkManager.Instance.SendChangeItemSlotPacket(player.ID, (Byte)_slotIndex1, (Byte)_slotIndex2);
+                PlayerManager.Instance.GetPlayer(player.ID).SwapItemNetwork((Byte)_slotIndex1, (Byte)_slotIndex2);
+            }
         }
     }
-    
+
+    private void DropItem()
+    {
+        SoundManager.Instance.PlayEffect(EffectType.ItemDrop);
+        SetAlpha(0);
+        RePosItem(_originParent, _originPos);
+        NetworkManager.Instance.SendDropItemPacket(PlayerManager.Instance.Players[0].ID, (Byte)_slotIndex1);
+        WindowManager.Instance.GetInGame().ReadyWindow.Drop.SetCloseSprite();
+        Destroy(this.gameObject);
+    }
+
+    private void EndDrag_Combination()
+    {
+
+    }
+
 
     /// <summary>
     /// 업그레이드 가능한지(아이템코드와, 업그레이드 성이 같은지) 확인, 3성이 아닌지 확인
@@ -405,7 +422,7 @@ public abstract class Item : MonoBehaviour, IDragHandler, IBeginDragHandler, IEn
     {
         return Code == code && Upgrade == upgrade && Upgrade != 2;
     }
-    
+
     /// <summary>
     /// 아이템 종류가 같은지
     /// </summary>
