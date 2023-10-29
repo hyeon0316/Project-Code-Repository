@@ -32,9 +32,6 @@
     - `ScriptableObject`를 사용하여 아이템 데이터 관리 
 
     #### 코드 목록
-    - json 데이터 파싱
-      https://github.com/hyeon0316/Project-Code-Repository/blob/cd8f4c55166b0f1af90b5fd4822ef1ce2dd77efb/2022-PlayX4Project/Scripts/Manager/DataManager.cs#L8-L71
-      <br/>
     - 스토리 진행 관리
       https://github.com/hyeon0316/Project-Code-Repository/blob/cd8f4c55166b0f1af90b5fd4822ef1ce2dd77efb/2022-PlayX4Project/Scripts/Manager/DialogueManager.cs#L99-L151
       <br/>
