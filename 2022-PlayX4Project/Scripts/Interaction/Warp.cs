@@ -10,7 +10,6 @@ public class Warp : Interaction
     [SerializeField] private Transform _nextPos;
     [SerializeField] private MapType _targetMap;
 
-    public static event Action<MapType> MapChangeEvent;
 
     public override void StartInteract()
     {
@@ -20,7 +19,7 @@ public class Warp : Interaction
 
     private void MoveMap()
     {
-        MapChangeEvent?.Invoke(_targetMap);
+        GameEvent.CallMapChange(_targetMap);
 
         CameraManager.Instance.CameraMovetype = 0;
         CameraManager.Instance.BackgroudUpdate();

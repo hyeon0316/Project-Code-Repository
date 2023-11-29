@@ -18,7 +18,12 @@ public class MapSystem : MonoBehaviour
 
     private void Awake()
     {
-        Warp.MapChangeEvent += SetMap;
+        GameEvent.MapChangeEvent += SetMap;
+    }
+
+    public void ReleaseEvent()
+    {
+        GameEvent.MapChangeEvent -= SetMap;
     }
 
     public void SetMap(MapType type)
