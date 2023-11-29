@@ -1,23 +1,18 @@
-﻿using System;
+﻿using Cysharp.Threading.Tasks;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public class Magma : MonoBehaviour
 {
-    private Material _mat;
+    [SerializeField] private Transform _resetPos;
+    [SerializeField] private Material _mat;
+
     private float _moveOffset;
-    private FadeImage _fade;
-    private Player _player;
-    private void Awake()
-    {
-        _player = FindObjectOfType<Player>();
-        _fade = GameObject.Find("Canvas").transform.Find("FadeImage").GetComponent<FadeImage>();
-    }
 
     private void OnEnable()
     {
-        _mat = GetComponent<MeshRenderer>().material;
         _moveOffset = 0;
     }
 
@@ -31,22 +26,25 @@ public class Magma : MonoBehaviour
     {
         if (other.CompareTag("Player"))
         {
-            StartCoroutine(RevivalCo());
+            Fall();
             this.GetComponent<BoxCollider>().enabled = false;
         }
     }
 
-    private IEnumerator RevivalCo()
+    private void Fall()
     {
-        _fade.FadeIn();
-        FindObjectOfType<Player>().IsStop = true;
-        yield return new WaitForSeconds(2f);
-        _player.transform.position = GameObject.Find("RevivalPos").transform.position;
-        FindObjectOfType<CameraManager>().transform.position = _player.transform.position + Vector3.up;
-        FindObjectOfType<Player>().GetComponent<Rigidbody>().useGravity = false;
-        _player.GetComponent<Rigidbody>().useGravity = true;
-        FindObjectOfType<Player>().IsStop = false;
+        PlayerManager.Instance.Player.StopMove();
+        FadeManager.Instance.FadeInAsync().ContinueWith(Respawn).Forget();
+    }
+
+    private void Respawn()
+    {
+        PlayerManager.Instance.Player.transform.position = _resetPos.position;
+        CameraManager.Instance.transform.position = PlayerManager.Instance.Player.transform.position + Vector3.up;
+        PlayerManager.Instance.Player.GetComponent<Rigidbody>().useGravity = false;
+        PlayerManager.Instance.Player.GetComponent<Rigidbody>().useGravity = true;
+        PlayerManager.Instance.Player.ReMove();
         this.GetComponent<BoxCollider>().enabled = true;
-        _fade.FadeOut();
+        FadeManager.Instance.FadeOut();
     }
 }

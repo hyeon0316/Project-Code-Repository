@@ -5,8 +5,6 @@ using UnityEngine.UI;
 
 public class CoolDown : MonoBehaviour
 {
-    private Player _player;
-    
     [Header("SKillA")]
     public KeyCode KeyA;
     public GameObject CoolDownA;
@@ -40,8 +38,6 @@ public class CoolDown : MonoBehaviour
     
     private void Awake()
     {
-        _player = FindObjectOfType<Player>();
-        
         _fillImageA = CoolDownA.transform.GetChild(0).GetComponent<Image>();
         _coolTimeTextA = CoolDownA.transform.GetChild(1).GetComponent<Text>();
         
@@ -65,7 +61,7 @@ public class CoolDown : MonoBehaviour
         {
             Debug.Log(KeyA);
             CoolDownA.SetActive(true);
-            _timeA = _player.CountTimeList[3];
+            _timeA =PlayerManager.Instance.Player.CountTimeList[3];
             _maxTimeA = _timeA;
             _fillImageA.fillAmount = _timeA / _maxTimeA;
             _isCoolDownA = true;
@@ -92,7 +88,7 @@ public class CoolDown : MonoBehaviour
         {
             Debug.Log(KeyS);
             CoolDownS.SetActive(true);
-            _timeS = _player.CountTimeList[2];
+            _timeS =PlayerManager.Instance.Player.CountTimeList[2];
             _maxTimeS = _timeS;
             _fillImageS.fillAmount = _timeS / _maxTimeS;
             _isCoolDownS = true;
@@ -119,7 +115,7 @@ public class CoolDown : MonoBehaviour
         {
             Debug.Log(KeyD);
             CoolDownD.SetActive(true);
-            _timeD = _player.CountTimeList[4];
+            _timeD =PlayerManager.Instance.Player.CountTimeList[4];
             _maxTimeD = _timeD;
             _fillImageD.fillAmount = _timeD / _maxTimeD;
             _isCoolDownD = true;

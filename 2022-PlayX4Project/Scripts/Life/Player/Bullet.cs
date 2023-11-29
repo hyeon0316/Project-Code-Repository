@@ -38,12 +38,12 @@ public class Bullet : MonoBehaviour
         {
             float beforehp = other.GetComponent<Life>().HpRatio;
             Debug.Log("bullet 히트");
-            other.GetComponent<I_hp>().SelectHit(AttackHitSoundType.AHit);
+            //other.GetComponent<I_hp>().SelectHit(AttackHitSoundType.AHit);
             if (other.GetComponent<Life>().HpRatio > 0)
             {
-                other.GetComponent<Life>().NA_stop(2f);
-                other.GetComponent<Life>().KnockBackRight(this.transform.position, 2);
-                if (other.GetComponent<I_hp>().Gethit(Power, 1))
+                other.GetComponent<Enemy>().NA_stop(2f);
+                other.GetComponent<Enemy>().KnockBackRight(this.transform.position, 2);
+                if (other.GetComponent<Life>().GetDamage(Power, 1))
                 {
                     GameObject.Find("Canvas(Enemy)").GetComponent<EnemyHpbar>().SwitchHPbar(other.GetComponent<Life>().LifeId, other.GetComponent<Life>().HpRatio, beforehp, true);
                 }

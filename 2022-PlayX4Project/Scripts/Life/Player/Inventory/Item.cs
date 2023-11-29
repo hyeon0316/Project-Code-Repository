@@ -54,7 +54,7 @@ public class ItemInspector : Editor
 public class Item : ScriptableObject
 {
     public ItemType Type;
-
+    public int Id;
     public float HillValue;
     public float ItemCoolDown;
 

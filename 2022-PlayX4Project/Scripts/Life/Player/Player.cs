@@ -14,12 +14,12 @@ using UnityEngine.AI;
 */
 
 
-public class Player : Life, I_hp
+public class Player : Life
 {
     /// <summary>
     /// 플레이어 상태를 알려주는 enum 변수
     /// </summary>
-    public enum PlayerstateEnum { Idle, Attack, Skill,ncSkill, Dead }
+    public enum PlayerstateEnum { Idle, Attack, Skill, ncSkill, Dead }
     /// <summary>
     /// 플레이어 상태
     /// </summary>
@@ -36,27 +36,18 @@ public class Player : Life, I_hp
     /// 0: 무적 ,1: 공격 딜레이 2:대쉬배기 쿨타임 3: 총 쿨타임 4:3번째 스킬 쿨타임 5: 구르기 쿨타임
     /// </summary>
     public float[] CountTimeList;
-    /// <summary>
-    /// 플레이어 애니메이터 변수
-    /// </summary>
-    public Animator PlayerAnim;
 
     private Animator _playerEffectAnim;
     /// <summary>
     /// 플레이어 스프라이트 렌더러
     /// </summary>
     private SpriteRenderer _playerSprite;//좌우 이동 시 방향 전환에 쓰일 변수
-    /// <summary>
-    /// 플레이어 rigidbody
-    /// </summary>
-    private Rigidbody _rigid;
+
     /// <summary>
     /// 플레이어가 사용할 UI를 모아둔 부모 객체, 자식을 찾아서 사용한다.
     /// </summary>
     public Transform PlayerUIObj;
 
-
-    
     /// <summary>
     /// 플레이어가 날고 있는지 확인
     /// </summary>
@@ -65,15 +56,9 @@ public class Player : Life, I_hp
     /// <summary>
     /// 계단 확인
     /// </summary>
-    private bool _isStair= false;
-
+    private bool _isStair = false;
     private bool _isWalljump = false;
-    /// <summary>
-    /// 플레이어가 대화하고 있는지 확인하느변수
-    /// </summary>
-    public bool IsStop = false;
-
-
+    private bool _isStop = false;
     private bool _isWall = false;
 
     private float wallisX = 0;
@@ -82,38 +67,35 @@ public class Player : Life, I_hp
     /// 벽타고 있는중인지 확인
     /// </summary>
     private bool _isWallslide = false;
-
     private bool _isRoll = false;
-
     public bool _isLadder = false;
-
     private float _slowSpeed;
     private float _oriSpeed;
-
-    private float _stepSmooth = 1f;
 
     private IEnumerator[] enumerators = new IEnumerator[3];
 
     private RaycastHit _wallslidehit;
     private int _wallslideObject;
 
-    public void Awake()
+    protected override void Awake()
+    {
+        base.Awake();
+        Init();
+    }
+
+    public void Init()
     {
         //필요한 컴포넌트, 데이터들을 초기화 해준다.
-        PlayerAnim = transform.GetChild(0).GetComponent<Animator>();
         _playerEffectAnim = transform.GetChild(0).GetChild(0).GetComponent<Animator>();
         _playerSprite = GetComponentInChildren<SpriteRenderer>();
-        _rigid = GetComponent<Rigidbody>();
-        //스텟을 초기화 해주는 함수.
-        Initdata(0,DataManager.Instance().Data.PlayerHp, DataManager.Instance().Data.PlayerPower, DataManager.Instance().Data.PlayerSpeed);
-        Debug.Log($"현재 플레이어 체력:{DataManager.Instance().Data.PlayerHp}");
         _oriSpeed = Speed;
         _slowSpeed = _oriSpeed * 0.75f;
         Playerstate = PlayerstateEnum.Idle;
         CountTimeList = new float[6];
         BulletParent = GameObject.Find("Bulletpool").transform;
-        BulletPool = new GameObject[12];
-        for (int i = 0; i < 12; i++)
+        DontDestroyOnLoad(BulletParent.gameObject);
+        BulletPool = new GameObject[BulletParent.childCount];
+        for (int i = 0; i < BulletParent.childCount; i++)
         {
             BulletPool[i] = BulletParent.GetChild(i).gameObject;
             BulletPool[i].SetActive(false);
@@ -127,28 +109,28 @@ public class Player : Life, I_hp
         CheckFry();
         if (!_isLadder && !_isWallslide && !SceneManager.GetActiveScene().name.Equals("Town"))
         {
-            if (!IsStop && (Playerstate != PlayerstateEnum.Dead && Playerstate != PlayerstateEnum.Skill && Playerstate != PlayerstateEnum.ncSkill))
+            if (!_isStop && (Playerstate != PlayerstateEnum.Dead && Playerstate != PlayerstateEnum.Skill && Playerstate != PlayerstateEnum.ncSkill))
             {
                 PlayerAttack();
 
             }
             //구르기 상태일때 스킬 사용 불가
-            if (!IsStop && (Playerstate != PlayerstateEnum.Dead&&Playerstate != PlayerstateEnum.ncSkill)&& !_isRoll && !_isFry)
+            if (!_isStop && (Playerstate != PlayerstateEnum.Dead && Playerstate != PlayerstateEnum.ncSkill) && !_isRoll && !_isFry)
             {
                 Skill();
             }
         }
-        
+
         if (!_isLadder)
         {
-            if (!SceneManager.GetActiveScene().name.Equals("Town") && !IsStop && (Playerstate != PlayerstateEnum.Dead
+            if (!SceneManager.GetActiveScene().name.Equals("Town") && !_isStop && (Playerstate != PlayerstateEnum.Dead
                     && Playerstate != PlayerstateEnum.Skill && Playerstate != PlayerstateEnum.ncSkill))
             {
                 PlayerJump();
-                
+
             }
 
-            if (!IsStop && (Playerstate != PlayerstateEnum.Dead&& Playerstate != PlayerstateEnum.Skill && Playerstate != PlayerstateEnum.ncSkill))
+            if (!_isStop && (Playerstate != PlayerstateEnum.Dead && Playerstate != PlayerstateEnum.Skill && Playerstate != PlayerstateEnum.ncSkill))
             {
                 PlayerMove_v1();
             }
@@ -156,25 +138,24 @@ public class Player : Life, I_hp
         else
         {
             //사다리 타고 있을때
-            PlayerAnim.speed = 0;
+            _anim.speed = 0;
             LadderMove();
         }
-        
+
     }
 
     private void FixedUpdate()
     {
-       
         UpDownStair();
         UpdateUI();
     }
-    
+
     /// <summary>
     /// 2층에서 계단 오를때 판정
     /// </summary>
     private void UpDownStair()
     {
-        
+
         RaycastHit hit;
         Debug.DrawRay(this.transform.position + Vector3.down * 0.7f, transform.TransformDirection(transform.GetChild(0).localScale.x > 0 ? Vector3.right : Vector3.left),
             Color.red);
@@ -189,9 +170,9 @@ public class Player : Life, I_hp
         {
             _isStair = false;
         }
-        
+
     }
-    
+
     /// <summary>
     /// 카운트 해야하는 변수들의 시간을 줄여주는 함수
     /// </summary>
@@ -204,9 +185,9 @@ public class Player : Life, I_hp
         }
     }
 
-    public void SelectHit(AttackHitSoundType type)
+    public void SelectHit(HitSoundType type)
     {
-        
+
     }
 
     /// <summary>
@@ -214,30 +195,24 @@ public class Player : Life, I_hp
     /// </summary>
     /// <param name="Cvalue"> 양수가 들어오면 데미지를 입고 음수가 들어오면 회복을 할 수 있다.</param>
     /// <returns>플레이어가 사망한다면 true 아니면 false를 반환한다</returns>
-    public bool Gethit(float Cvalue ,float coefficient)
+    public override bool GetDamage(float dmg, float addDmg)
     {
-        //데미지가 들어오니 무적 카운트와 hit 애니메이션 실행
-        if (Cvalue > 0)
+        if (_hp > 0)
         {
-            if (HP > 0)
+            //플레이어가 무적상태라면 애니메이션과 채력계산을 무시하고 리턴한다.
+            if (CountTimeList[0] > 0)
             {
-                //플레이어가 무적상태라면 애니메이션과 채력계산을 무시하고 리턴한다.
-                if (CountTimeList[0] > 0)
-                    return CheckLiving();
+                return false;
+            }
 
-                CountTimeList[0] = 0.42f;
-                PlayerAnim.SetTrigger("Hit");
-                
-                HP -= (Cvalue * coefficient);
-                return CheckLiving();
-            }
-            else
-            {
-                return true;
-            }
+            CountTimeList[0] = 0.42f;
+            _anim.SetTrigger("Hit");
+            _hp -= dmg * addDmg;
+            return CheckLiving();
         }
         return false;
     }
+ 
     /// <summary>
     /// 1번째 인자 반대편으로 너백당하는 함수
     /// </summary>
@@ -258,56 +233,11 @@ public class Player : Life, I_hp
 
     IEnumerator StopTime(float time)
     {
-        IsStop = true;
+        _isStop = true;
         yield return new WaitForSeconds(time);
-        IsStop = false;
+        _isStop = false;
     }
 
-    /// <summary>
-    /// 플레이어가 살아있는지 확인하는 함수, hp 가 0 이하로 떨어진다면 죽는 애니메이션 실행
-    /// </summary>
-    /// <returns>hp 가 0 이하라면 ture 아니면 false 를 반환</returns>
-    public bool CheckLiving()
-    {
-        if (HP <= 0)
-        {
-            GameObject.Find("Colliders").transform.Find("Collider_Dungeon3").transform.Find("UnderCollider").gameObject.SetActive(true);
-            FindObjectOfType<SoundManager>().Play("Player/PlayerDead",SoundType.Effect);
-            PlayerAnim.SetBool("Dead", true);
-            Playerstate = PlayerstateEnum.Dead;
-            StartCoroutine(ReviveCo());
-            return true;
-        }
-        else
-            return false;
-    }
-    private IEnumerator ReviveCo()
-    {
-        GameObject.Find("Canvas").transform.Find("FadeImage").GetComponent<FadeImage>().FadeIn();
-        FindObjectOfType<CameraManager>().CameraMovetype = 0;
-        FindObjectOfType<EnemyHpbar>().HpbarReset();
-        yield return new WaitForSeconds(2f);
-        PlayerAnim.SetBool("Dead", false);
-        GameObject.Find("Canvas").transform.Find("FadeImage").GetComponent<FadeImage>().FadeOut();
-        this.transform.position = GameObject.Find("GameResetPos").transform.position;
-        FindObjectOfType<GameManager>().ActivateCollider("Collider_Dungeon1");
-        FindObjectOfType<CameraManager>().BackgroudUpdate();
-        FindObjectOfType<CameraManager>().ChangeCameraType();
-        Initdata(0,DataManager.Instance().Data.PlayerHp, DataManager.Instance().Data.PlayerPower, DataManager.Instance().Data.PlayerSpeed);
-        Playerstate = PlayerstateEnum.Idle;
-
-        GameManager Enemy = GameObject.Find("GameManager").GetComponent<GameManager>();
-        for(int i = 0; i < Enemy.EnemyPos.Length; i++)
-        {
-            for(int j = 0; j < Enemy.EnemyPos[i].transform.childCount; j++)
-            {
-                if(Enemy.EnemyPos[i].transform.GetChild(j).GetComponent<Life>().HP > 0)
-                Enemy.EnemyPos[i].transform.GetChild(j).GetComponent<I_hp>().Gethit(-999, 1);
-            }
-        }
-       
-    }
-    
     /// <summary>
     /// 플레이어 이동 방식 버전 1
     /// rigidbody 속 movePosition 사용
@@ -328,7 +258,7 @@ public class Player : Life, I_hp
         if (Input.GetButton("Horizontal") || Input.GetButton("Vertical"))
         {
             //달리는 상태로 변환
-            PlayerAnim.SetBool("IsRun", true);
+            _anim.SetBool("IsRun", true);
             //플레이어가 공격중이 아닐때만 이동할 수 있도록 설정
             if (Playerstate != PlayerstateEnum.Attack && !_isWalljump)
             {
@@ -357,8 +287,8 @@ public class Player : Life, I_hp
 
                         if (Input.GetKeyDown(KeyCode.DownArrow))
                         {
-                           
-                            PlayerAnim.SetBool("WallSlide", false);
+
+                        _anim.SetBool("WallSlide", false);
                             Physics.gravity = Vector3.down * 25f;
                         }
                     }
@@ -375,7 +305,7 @@ public class Player : Life, I_hp
         }
         else
         {
-            PlayerAnim.SetBool("IsRun", false);
+            _anim.SetBool("IsRun", false);
             if(!_isFry)
             _rigid.velocity =  new Vector3(_rigid.velocity.x * 0.75f, _rigid.velocity.y * 1f, _rigid.velocity.z * 0.75f);
         }
@@ -390,7 +320,6 @@ public class Player : Life, I_hp
         {
             if (colliderObj.transform.Find("Collider").transform.Find("Top"))
             {
-                GameObject.Find("Colliders").transform.Find("Collider_Dungeon3").transform.Find("UnderCollider").gameObject.SetActive(false);
                 Debug.Log("위쪽에서");
                 ClimbLadder(colliderObj,-0.5f);
             }
@@ -412,12 +341,11 @@ public class Player : Life, I_hp
             }
             else//위쪽에서 내릴 때
             {
-                GameObject.Find("Colliders").transform.Find("Collider_Dungeon3").transform.Find("UnderCollider").gameObject.SetActive(true);
                 this.transform.position = new Vector3(colliderObj.transform.position.x - 1f, this.transform.position.y + 0.5f,
                     colliderObj.transform.position.z);
             }
             GetComponent<Rigidbody>().useGravity = true;
-            PlayerAnim.SetBool("Ladder", false);
+            _anim.SetBool("Ladder", false);
         }
     }
 
@@ -431,8 +359,8 @@ public class Player : Life, I_hp
         this.transform.position = new Vector3(ladder.transform.position.x, this.transform.position.y + startPos,
             ladder.transform.position.z - 0.1f);
 
-        PlayerAnim.SetBool("Ladder", true);
-        PlayerAnim.SetTrigger("LadderTri");
+        _anim.SetBool("Ladder", true);
+        _anim.SetTrigger("LadderTri");
     }
 
     private void LadderMove()
@@ -440,7 +368,7 @@ public class Player : Life, I_hp
         float v = Input.GetAxisRaw("Vertical") * 2;
 
         if (v != 0)
-            PlayerAnim.speed = 1;
+            _anim.speed = 1;
         
         this.transform.Translate(Vector3.up * v * Time.deltaTime);
     }
@@ -455,7 +383,7 @@ public class Player : Life, I_hp
                 if (!_isFry)
                 {
                     ChangeFry(true);
-                    PlayerAnim.SetBool("IsJump", true);
+                    _anim.SetBool("IsJump", true);
                     //플레이어가 y 축으로 올라갈 수 있도록 velocity 를 재설정
                     gameObject.GetComponent<Rigidbody>().velocity =
                         new Vector3(_rigid.velocity.x, 1 * 10f, _rigid.velocity.z);
@@ -469,8 +397,8 @@ public class Player : Life, I_hp
                         //점프 애니메이션
                             _isWalljump = true;
                             _isWallslide = false;
-                            PlayerAnim.SetBool("IsJump", true);
-                            PlayerAnim.SetBool("WallSlide", false);
+                        _anim.SetBool("IsJump", true);
+                        _anim.SetBool("WallSlide", false);
                             Physics.gravity = Vector3.down * 25f;
                     }
                 }
@@ -503,12 +431,12 @@ public class Player : Life, I_hp
             float Distance = hit.distance;
             if (_isFry && _rigid.velocity.y < 9.8f)
             {
-                PlayerAnim.SetBool("IsFall", true);
+                _anim.SetBool("IsFall", true);
             }
             if (_isFry && Distance < 0.25f)
             {
-                PlayerAnim.SetBool("IsFall", false);
-                PlayerAnim.SetBool("IsJump", false);
+                _anim.SetBool("IsFall", false);
+                _anim.SetBool("IsJump", false);
 
                 ChangeFry(false);
                 _isWalljump = false;
@@ -520,7 +448,7 @@ public class Player : Life, I_hp
                 {
                     
                     _isWallslide = false;
-                    PlayerAnim.SetBool("WallSlide", false);
+                    _anim.SetBool("WallSlide", false);
                     Physics.gravity = Vector3.down * 25f;
                 }
             }
@@ -533,13 +461,13 @@ public class Player : Life, I_hp
               
             if (_isFry && _rigid.velocity.y < 9.8f)
             {
-                PlayerAnim.SetBool("IsFall", true);
+                _anim.SetBool("IsFall", true);
             }
             if (_isFry && Distance < 0.08f && _rigid.velocity.y < 9.8f)
             {
-               
-                PlayerAnim.SetBool("IsFall", false);
-                PlayerAnim.SetBool("IsJump", false);
+
+                _anim.SetBool("IsFall", false);
+                _anim.SetBool("IsJump", false);
 
                 ChangeFry(false);
                 _isWalljump = false;
@@ -551,7 +479,7 @@ public class Player : Life, I_hp
                 {
                     
                     _isWallslide = false;
-                    PlayerAnim.SetBool("WallSlide", false);
+                    _anim.SetBool("WallSlide", false);
                     Physics.gravity = Vector3.down * 25f;
                 }
             }
@@ -574,15 +502,15 @@ public class Player : Life, I_hp
             if (!_isFry) { 
             if (Input.GetKeyDown(KeyCode.Z))
             {
-               
-                PlayerAnim.SetTrigger("AgainAttack");
+
+                    _anim.SetTrigger("AgainAttack");
                 CountTimeList[1] = 0.98f;
             }
             }
 
             if (Input.GetKeyDown(KeyCode.X))
             {
-                PlayerAnim.SetTrigger("Attack");
+                _anim.SetTrigger("Attack");
                 CountTimeList[1] = 0.34f;
                 Speed = _slowSpeed;
            
@@ -632,7 +560,7 @@ public class Player : Life, I_hp
                 CountTimeList[2] = 10f;
                 Playerstate = PlayerstateEnum.ncSkill;
                 AllstopSkillCor();
-                PlayerAnim.SetTrigger("Skill1");
+                _anim.SetTrigger("Skill1");
                 Debug.Log("!!");
             }
         }else if (Input.GetKeyDown(KeyCode.A))
@@ -654,7 +582,7 @@ public class Player : Life, I_hp
                 Playerstate = PlayerstateEnum.ncSkill;
                 _rigid.velocity = Vector3.zero;
                 AllstopSkillCor();
-                PlayerAnim.SetTrigger("Skill3");
+                _anim.SetTrigger("Skill3");
              
             }
         }else if (Input.GetKeyDown(KeyCode.LeftShift))
@@ -689,7 +617,7 @@ public class Player : Life, I_hp
         }
         Vector3 startpos = this.transform.position;
         Vector3 endpos = startpos + (Vector3.right * distance);
-        yield return new WaitForSeconds(PlayerAnim.GetCurrentAnimatorStateInfo(0).length * 0.1f);
+        yield return new WaitForSeconds(_anim.GetCurrentAnimatorStateInfo(0).length * 0.1f);
         _rigid.useGravity = false;
         _rigid.velocity = Vector3.zero;
         for (int i = 1; i <= 10; i++)
@@ -699,8 +627,8 @@ public class Player : Life, I_hp
             yield return new WaitForEndOfFrame();
         }
         _playerEffectAnim.SetTrigger("Skill1");
-        yield return new WaitForSeconds(PlayerAnim.GetCurrentAnimatorStateInfo(0).length 
-            - PlayerAnim.GetCurrentAnimatorStateInfo(0).length * (PlayerAnim.GetCurrentAnimatorStateInfo(0).normalizedTime+0.03f));
+        yield return new WaitForSeconds(_anim.GetCurrentAnimatorStateInfo(0).length 
+            - _anim.GetCurrentAnimatorStateInfo(0).length * (_anim.GetCurrentAnimatorStateInfo(0).normalizedTime+0.03f));
         _rigid.useGravity = true;
 
     }
@@ -709,11 +637,11 @@ public class Player : Life, I_hp
     {
         for (int i = 0; i < 3; ++i)
         {
-            PlayerAnim.SetTrigger("Skill2");
+            _anim.SetTrigger("Skill2");
             _playerEffectAnim.SetTrigger("Skill2");
             yield return new WaitForSecondsRealtime(0.31f);
         }
-        FindObjectOfType<SoundManager>().Play("Player/BulletDrop", SoundType.Effect);
+        SoundManager.Instance.Play("Player/BulletDrop", SoundType.Effect);
         yield return new WaitForSecondsRealtime(0.09f);
         Playerstate = PlayerstateEnum.Idle;//스킬이 끝나는 타이밍
     }
@@ -759,7 +687,7 @@ public class Player : Life, I_hp
         _rigid.velocity = Vector3.zero;
         if(hitObj.Count == 0)
         {
-            PlayerAnim.SetTrigger("NotFlyattack");
+            _anim.SetTrigger("NotFlyattack");
             Playerstate = PlayerstateEnum.Idle;
             CountTimeList[4] = 3f;//쿨타임 감소
             FindObjectOfType<CoolDown>().TimeD = CountTimeList[4];
@@ -789,7 +717,7 @@ public class Player : Life, I_hp
         for (int i = 0; i < gameObjects.Length; i++)
         {
             if (gameObjects[i].name.Contains("Demon"))continue;
-            gameObjects[i].GetComponent<I_EnemyControl>()._enemystate = Enemystate.Stop;
+            //gameObjects[i].GetComponent<I_EnemyControl>()._enemystate = Enemystate.Stop;
             gameObjects[i].GetComponent<Rigidbody>().useGravity = false;
             gameObjects[i].GetComponent<Rigidbody>().velocity = Vector3.zero;
             gameObjects[i].GetComponent<NavMeshAgent>().enabled = false;   
@@ -821,7 +749,7 @@ public class Player : Life, I_hp
         if (gameObjects.Length >= 1)
         {
             ChangeFry(true);
-            PlayerAnim.SetBool("IsJump", true);
+            _anim.SetBool("IsJump", true);
             for (int timeline = 0; timeline < 10; timeline++)
             {
                 _rigid.useGravity = false;
@@ -851,18 +779,18 @@ public class Player : Life, I_hp
         for (int i = 0; i < gameObjects.Length; i++)
         {
             if (gameObjects[i].name.Contains("Demon")) continue;
-            gameObjects[i].GetComponent<I_EnemyControl>()._enemystate = Enemystate.Find;
+            //gameObjects[i].GetComponent<I_EnemyControl>()._enemystate = Enemystate.Find;
             gameObjects[i].GetComponent<NavMeshAgent>().enabled = true;
             gameObjects[i].GetComponentInChildren<Animator>().SetTrigger("Hitstop");
 
         }
-        PlayerAnim.SetBool("IsFail", true);
+        _anim.SetBool("IsFail", true);
         Playerstate = PlayerstateEnum.Idle;
     }
 
     public void Roll()
     {
-        PlayerAnim.SetTrigger("Roll");
+        _anim.SetTrigger("Roll");
         StartCoroutine(RollCor());
     }
 
@@ -902,6 +830,15 @@ public class Player : Life, I_hp
         CountTimeList[0] = 0.01f;
     }
 
+    public void Heal(float value)
+    {
+        _hp += value;
+        if(_hp > MaxHp)
+        {
+            _hp = MaxHp;
+        }
+    }
+
     /// <summary>
     /// 플레이어 UI 업데이트 할 때 사용할 예정이 함수(데이터 전달 및 갱신)
     /// </summary>
@@ -909,7 +846,7 @@ public class Player : Life, I_hp
     {
         if (PlayerUIObj != null)
         {
-            PlayerUIObj.GetChild(0).GetComponent<Text>().text = "체력:" + HP.ToString();
+            PlayerUIObj.GetChild(0).GetComponent<Text>().text = "체력:" + Hp.ToString();
             PlayerUIObj.GetChild(1).GetComponent<Text>().text = "무적시간:" + CountTimeList[0].ToString();
         }
     }
@@ -952,13 +889,13 @@ public class Player : Life, I_hp
                 if (!_isWallslide)
                 {
                     Debug.Log("2벽충돌");
-                    FindObjectOfType<SoundManager>().Play("Player/PlayerWall",SoundType.Effect);
+                    SoundManager.Instance.Play("Player/PlayerWall",SoundType.Effect);
                     Physics.gravity = Vector3.down * 5f;
                     _rigid.velocity = Vector3.zero;
                     this.transform.GetChild(0).localScale = new Vector3(this.transform.GetChild(0).localScale.x * -1,
                     this.transform.GetChild(0).localScale.y,
                     this.transform.GetChild(0).localScale.z);
-                    PlayerAnim.SetBool("WallSlide", true);
+                    _anim.SetBool("WallSlide", true);
                     _isWalljump = false;
                     _isWallslide = true;
                     _wallslideObject = _wallslidehit.transform.gameObject.GetInstanceID();
@@ -967,34 +904,26 @@ public class Player : Life, I_hp
         }
     }
 
-    private void OnTriggerEnter(Collider other)
-    {
-        if (other.CompareTag("Tutorial"))
-        {
-            GameObject.Find("UICanvas").transform.Find("EscBtn").gameObject.SetActive(true);
-            other.GetComponent<BoxCollider>().enabled = false;
-        }
-    }
-
     private void OnCollisionExit(Collision collision)
     {
         if (collision.gameObject.layer == LayerMask.NameToLayer("Wall"))
         {
             _isWall = false;
-            
+
             if (_isWallslide)
             {
                 _isWalljump = false;
                 _isWallslide = false;
-                PlayerAnim.SetBool("WallSlide", false);
+                _anim.SetBool("WallSlide", false);
                 Physics.gravity = Vector3.down * 25;
                 _wallslideObject = this.gameObject.GetInstanceID();
             }
         }
 
-        if (_isFry) { 
-        wallisX = 0;
-        wallisZ = 0;
+        if (_isFry)
+        {
+            wallisX = 0;
+            wallisZ = 0;
         }
     }
 
@@ -1035,11 +964,57 @@ public class Player : Life, I_hp
     /// 플레이어의 방향을 바꿔주는 함수
     /// </summary>
     /// <param name="scaleX"></param>
-    public void ChangeDirection(bool isChange = true)
+    public void ChangeDirection(bool isRight = true)
      {
-         if(isChange)
+         if(isRight)
              this.transform.GetChild(0).localScale = new Vector3(2.5f, 2.5f, 1);
-         else if(!isChange)
+         else if(!isRight)
              this.transform.GetChild(0).localScale = new Vector3(-2.5f, 2.5f, 1);
      }
+
+    public void StopMove()
+    {
+        _rigid.velocity = Vector3.zero;
+        _isStop = true;
+        _anim.SetBool("IsRun", false);
+    }
+
+    public void ReMove()
+    {
+        _isStop = false;
+    }
+
+    public void SetPos(Vector3 pos)
+    {
+        this.transform.position = pos;
+    }
+
+    public void DelayChangeDirCo(float t, bool isRight)
+    {
+        StartCoroutine(DelayChangeDir(t, isRight));
+    }
+
+    private IEnumerator DelayChangeDir(float t, bool isRight)
+    {
+        yield return new WaitForSeconds(t);
+        ChangeDirection(isRight);
+    }
+
+    protected override IEnumerator DeadEventCo()
+    {
+        SoundManager.Instance.Play("Player/PlayerDead", SoundType.Effect);
+        _anim.SetBool("Dead", true);
+        Playerstate = PlayerstateEnum.Dead;
+        FadeManager.Instance.FadeIn();
+        CameraManager.Instance.CameraMovetype = 0;
+        FindObjectOfType<EnemyHpbar>().HpbarReset();
+        yield return new WaitForSeconds(2f);
+        _anim.SetBool("Dead", false);
+        FadeManager.Instance.FadeOut();
+        this.transform.position = GameObject.Find("GameResetPos").transform.position;
+        CameraManager.Instance.BackgroudUpdate();
+        CameraManager.Instance.ChangeCameraType();
+        _hp = MaxHp;
+        Playerstate = PlayerstateEnum.Idle;
+    }
 }

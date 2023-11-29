@@ -5,7 +5,6 @@ using UnityEngine;
 using UnityEngine.Timeline;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
-using UnityEngine.SceneManagement;
 
 
 
@@ -19,23 +18,11 @@ public class SystemBase : MonoBehaviour
 
     public float BgmVolume = 1;
     public float EffectVolume = 1;
-    
-    private static SystemBase _instance = null;
+
 
     private void Awake()
     {
-        if (_instance == null && !SceneManager.GetActiveScene().name.Equals("Menu"))
-        {
-            _instance = this;
-            DontDestroyOnLoad(this.gameObject);
-        }
-        else 
-        {
-            if (this != _instance)
-            {
-                Destroy(this.gameObject);
-            }
-        }
+        DontDestroyOnLoad(this.gameObject);
     }
     
     private void Start()
@@ -48,14 +35,6 @@ public class SystemBase : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            if (SceneManager.GetActiveScene().name.Equals("Tutorial"))
-            {
-                if (FindObjectOfType<Tutorial>().ManualWindow.activeSelf)
-                {
-                    FindObjectOfType<Tutorial>().ManualWindow.SetActive(false);
-                    return;
-                }
-            }
             _isActivate = !_isActivate;
             OpenSystem(_isActivate);
             BgmSlider.gameObject.SetActive(false);
@@ -83,14 +62,14 @@ public class SystemBase : MonoBehaviour
 
     public void ResumeBtn()
     {
-        FindObjectOfType<SoundManager>().Play("Object/Button",SoundType.Effect);
+        SoundManager.Instance.Play("Object/Button",SoundType.Effect);
         _isActivate = false;
         OpenSystem(_isActivate);
     }
 
     public void LobbyBtn()
     {
-        FindObjectOfType<SoundManager>().Play("Object/Button",SoundType.Effect);
+        SoundManager.Instance.Play("Object/Button",SoundType.Effect);
         _isActivate = false;
         SystemWindow.SetActive(_isActivate);
         SceneManager.LoadScene("Menu");
@@ -99,7 +78,7 @@ public class SystemBase : MonoBehaviour
 
     public void ExitBtn()
     {
-        FindObjectOfType<SoundManager>().Play("Object/Button", SoundType.Effect);
+        SoundManager.Instance.Play("Object/Button", SoundType.Effect);
     #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
     #else
@@ -109,11 +88,22 @@ public class SystemBase : MonoBehaviour
 
     public void SoundBtn()
     {
-        FindObjectOfType<SoundManager>().Play("Object/Button",SoundType.Effect);
+        SoundManager.Instance.Play("Object/Button",SoundType.Effect);
         _canAdjust = !_canAdjust;
         BgmSlider.gameObject.SetActive(_canAdjust);
         EffectSlider.gameObject.SetActive(_canAdjust);
     }
+
+    public void ApplyBgm(float value)
+    {
+        SoundManager.Instance.ApplyBgmVolume(value);
+    }
+
+    public void ApplyEffect(float value)
+    {
+        SoundManager.Instance.ApplyEffectVolume(value);
+    }
+
 
     private void CloseSoundBtn()
     {

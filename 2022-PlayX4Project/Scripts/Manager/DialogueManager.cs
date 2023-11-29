@@ -1,47 +1,41 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
+using System.Text;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using Cysharp.Threading.Tasks;
 
-public class DialogueManager : MonoBehaviour
+public class DialogueManager : SingletonAwake<DialogueManager>
 {
-    public Queue<string> Sentences = new Queue<string>();
+    private const string DELETE_SENTENCE = "Delete";
+    private const string REPEAT_SENTENCE = "Repeat";
+    private const string MOVE_CAMERA = "MoveCamera";
+    private const string RESET_CAMERA = "ResetCamera";
+
+    public Npc CurNpc { get; set; }
+    public bool IsTalking { get; private set; }
+
+    [SerializeField] private RectTransform[] _letterBox;
+    [SerializeField] private GameObject _TalkPanel;
+    [SerializeField] private Text _talkText;
+    [SerializeField] private GameObject _NextObj;
+    [SerializeField] private float _normalDelayTime;
+    [SerializeField] private float _fastDelayTime;
+
+    private Queue<string> _sentences = new Queue<string>();
     private bool _isTyping = false;
     private string _currentSentence;
+    private float _textDelay;
+    private Vector3 _fixedPanelVec;
 
-    [SerializeField] private GameObject _letterBoxParent;
-    private RectTransform[] _letterBox;//npc와 대화를 할때 나타나는 상,하 검은색 바
-    private float _textDelay = 0.1f;
-    private Text _dialogueText;
-    public NpcTalk Npc;
-
-    private Player _player;
-
-    public bool IsNextTalk = false;
-
-    public GameObject TalkPanel;
-
-    private GameManager _gameManager;
-
-    private GameObject _playerUI;
-
-    private void Awake()
+    protected override void Awake()
     {
-        _gameManager = FindObjectOfType<GameManager>();
-        TalkPanel = GameObject.Find("UICanvas").transform.Find("TalkPanel").gameObject;
-        _player = GameObject.Find("Player").GetComponent<Player>();
-        //부모 오브젝트까지 같이 반환,
-        //RectTransform으로 가져오는 것이기 때문에
-        _letterBox = _letterBoxParent.GetComponentsInChildren<RectTransform>();
-        _playerUI = GameObject.Find("PlayerUICanvas");
+        base.Awake();
+        _textDelay = _normalDelayTime;
     }
-    private void Start()
-    {
-        GameObject.Find("Canvas").transform.Find("FadeImage").GetComponent<FadeImage>().FadeOut();
-    }
+
     private void Update()
     {
         TalkCheck();
@@ -49,35 +43,28 @@ public class DialogueManager : MonoBehaviour
 
     private void TalkCheck()
     {
-        if (!SceneManager.GetActiveScene().name.Equals("Tutorial"))
+        if (IsTalking)
         {
-            if (TalkPanel.activeSelf)
-            {
-                //텍스트가 전부 채워졌을때
-                if (_dialogueText.text.Equals(_currentSentence))
-                {
-                    _isTyping = false;
-                    _textDelay = 0.1f;
-                    TalkPanel.transform.Find("Next").gameObject.SetActive(true);
-                }
+            _TalkPanel.transform.position = _fixedPanelVec;
 
-                //대화 진행
-                if (!_isTyping && Input.GetKeyDown(KeyCode.Space))
+            //대화 진행
+            if (Input.GetKeyDown(KeyCode.Space))
+            {
+                if (!_isTyping)
                 {
                     NextSentence();
-                    TalkPanel.transform.Find("Next").gameObject.SetActive(false);
+                    _NextObj.gameObject.SetActive(false);
                 }
-                else if (_isTyping && Input.GetKeyDown(KeyCode.Space))
+                else
                 {
-                    _textDelay = 0.0001f;
+                    _textDelay = _fastDelayTime;
                 }
             }
         }
     }
     
-    public void TalkStart()
+    public void ActiveLetterBox()
     {
-        _dialogueText = TalkPanel.GetComponentInChildren<Text>();
         StartCoroutine(LetterBoxOnCo());
     }
 
@@ -86,74 +73,71 @@ public class DialogueManager : MonoBehaviour
     /// 대화내용들을 저장시켜 하나씩 꺼내 사용
     /// </summary>
     /// <param name="lines">대화 내용들</param>
-    public void OnDialogue(string[] lines)
+    public void OnDialogue(List<string> lines)
     {
-        Sentences.Clear();
+        IsTalking = true;
+        _sentences.Clear();
         foreach (string line in lines)
         {
-            Sentences.Enqueue(line);
+            _sentences.Enqueue(line);
         }
         NextSentence();
     }
 
-    public void NextSentence()
+    private  void NextSentence()
     {
-        if (!Sentences.Peek().Equals("Delete") && !Sentences.Peek().Equals("Stop") && !Sentences.Peek().Equals("Camera"))
+        string curSentense = _sentences.Peek();
+        if (curSentense.Equals(DELETE_SENTENCE))
         {
-            if (Sentences.Peek().Contains("보다시피"))
-            {
-                FindObjectOfType<CameraManager>().Target = Npc.gameObject;
-                StartCoroutine(DelayChangeDirCo());
-            }
-            TalkPanel.SetActive(false);
-            Invoke("DelayTalk",0.5f);
+            HandleDeleteSentence();
         }
-        else if(Sentences.Peek().Equals("Delete"))
+        else if (curSentense.Equals(REPEAT_SENTENCE))
         {
-            List<string> tmp = new List<string>(Npc.Sentences);
-            for (int i = 0; i < tmp.Count; i++)
-            {
-                i = 0;
-                if (tmp[i].Equals("Delete"))
-                {
-                    tmp.RemoveAt(i);
-                    break;
-                }
-                tmp.RemoveAt(i);
-            }
-            Npc.Sentences = tmp.ToArray();
-            CloseTalkPanel();
-            if (Npc.transform.Find("Captain") || Npc.transform.Find("Lady"))
-            {
-                _gameManager.Walf[0].SetActive(true);
-            }
-            else if (Npc.transform.Find("Man"))
-            {
-                //todo: 네비게이션 점프맵쪽으로 안내
-                FindObjectOfType<NavSpawner>().SpawnNav(GameObject.Find("JumpMapChest").transform.position);
-            }
+            HandleRepeatSentence();
         }
-        else if (Sentences.Peek().Equals("Stop"))
+        else if (curSentense.Equals(MOVE_CAMERA))
         {
-            CloseTalkPanel();
-            if (SceneManager.GetActiveScene().name.Equals("Dungeon"))
-            {
-                if (_gameManager.EnemyPos[4].transform.parent.gameObject.activeSelf)
-                    FindObjectOfType<Necromancer>().IsCutScene = false;
-            }
+            HandleMoveCamera();
         }
-        else if (Sentences.Peek().Equals("Camera"))
+        else if(curSentense.Equals(RESET_CAMERA))
         {
-            Sentences.Dequeue();
-            FindObjectOfType<CameraManager>().Target = GameObject.Find("CameraMovePos").gameObject;
-            _player.ChangeDirection(false);
+            HandleResetCamera();
+        }
+        else
+        {
+            HandleNormalSentence();
         }
     }
 
-    private IEnumerator DelayChangeDirCo()
+    private void HandleDeleteSentence()
     {
-        yield return new WaitForSeconds(2f);
-        _player.ChangeDirection();
+        CurNpc.RemoveDataUntilTaget(DELETE_SENTENCE);
+        CloseTalkPanel();
+    }
+
+    private void HandleRepeatSentence()
+    {
+        CloseTalkPanel();
+    }
+
+    private void HandleMoveCamera()
+    {
+        _sentences.Dequeue();
+        CameraManager.Instance.SetTarget(CachingManager.Instance().SecondFloorCameraPos);
+        PlayerManager.Instance.Player.ChangeDirection(false);
+    }
+
+    private void HandleResetCamera()
+    {
+        CameraManager.Instance.SetTarget(CurNpc.gameObject);
+        PlayerManager.Instance.Player.DelayChangeDirCo(2f, true);
+        HandleNormalSentence();
+    }
+
+    private void HandleNormalSentence()
+    {
+        SetActiveTalkPanel(false);
+        Invoke(nameof(DelayNextTalk), 0.5f);
     }
 
     /// <summary>
@@ -161,67 +145,59 @@ public class DialogueManager : MonoBehaviour
     /// </summary>
     private void CloseTalkPanel()
     {
-        if(SceneManager.GetActiveScene().name.Equals("Dungeon"))
-            _playerUI.SetActive(true);
-        
-        _player.IsStop = false;
-        FindObjectOfType<CameraManager>().Target = _player.gameObject;
-        Invoke("ReTalk", 0.01f);
-        TalkPanel.SetActive(false);
+        PlayerManager.Instance.SetActivePlayerUI(true);
+        PlayerManager.Instance.Player.ReMove();
+        IsTalking = false; 
+        CameraManager.Instance.SetTarget(PlayerManager.Instance.Player.gameObject);
+        SetActiveTalkPanel(false);
         StartCoroutine(LetterBoxOffCo());
+        Invoke(nameof(ReTalk), 0.01f);
     }
     
-    
-    /// <summary>
-    /// 다음 대화 문장이 진행 될때마다 패널이 껏다 켜지기 위함
-    /// </summary>
-    private void DelayTalk()
+    private void DelayNextTalk()
     {
-        TalkPanel.SetActive(true);
-        _currentSentence = Sentences.Dequeue();
+        SetActiveTalkPanel(true);
+        _currentSentence = _sentences.Dequeue();
         _isTyping = true;
-        StartCoroutine(TypingCo(_currentSentence));
+        TypingAsync(_currentSentence).ContinueWith(FillText).Forget();
     }
 
     /// <summary>
-    /// 대화를 마치고 제자리에서 다시 대화를 할 경우 다시 처음 대사를 출력하기 위해 딜레이용으로 사용
+    /// 대화를 마치고 제자리에서 다시 대화를 할 경우 바로 상호작용 가능하도록 설정
     /// </summary>
     private void ReTalk()
     {
-        //보스방에서 함수 실행시 오류나므로 조건문 걸어줘야함
-        if (SceneManager.GetActiveScene().name.Equals("Dungeon"))
+        if (Vector3.Distance(PlayerManager.Instance.Player.transform.position, CurNpc.transform.position) <= 1.2f)
         {
-            if (!_gameManager.EnemyPos[4].transform.parent.gameObject.activeSelf && !_gameManager.EnemyPos[2].transform.parent.gameObject.activeSelf)
-            {
-                Npc.ActionBtn.SetActive(true);
-                Npc.CanInteract = true;
-            }
-        }
-        else
-        {
-            if (Vector3.Distance(_player.transform.position, Npc.transform.position) <= 1.2f)
-            {
-                Npc.ActionBtn.SetActive(true);
-                Npc.CanInteract = true;
-            }
+            CurNpc.ReTalk();
         }
     }
 
     /// <summary>
     /// 텍스트를 한글자씩 출력
     /// </summary>
-    /// <param name="line">한 글자씩 출력할 문장</param>
-    /// <returns></returns>
-    private IEnumerator TypingCo(string line)
+    private async UniTask TypingAsync(string line)
     {
-        _dialogueText.text = "";
+        StringBuilder sb = new StringBuilder();
+        _talkText.text = "";
         foreach (char letter in line.ToCharArray())
         {
-            _dialogueText.text += letter;
-            if(_textDelay == 0.1f)
-                FindObjectOfType<SoundManager>().Play("Object/Talk",SoundType.Effect);
-            yield return new WaitForSeconds(_textDelay);
+            sb.Append(letter);
+            _talkText.text = sb.ToString(); 
+            if (_textDelay == _normalDelayTime)
+            {
+                SoundManager.Instance.Play("Object/Talk", SoundType.Effect);
+            }
+
+            await UniTask.Delay(TimeSpan.FromSeconds(_textDelay));
         }
+    }
+
+    private void FillText()
+    {
+        _isTyping = false;
+        _textDelay = _normalDelayTime;
+        _NextObj.gameObject.SetActive(true);
     }
     
     private IEnumerator LetterBoxOnCo()
@@ -246,17 +222,28 @@ public class DialogueManager : MonoBehaviour
         }
     }
     
-
     /// <summary>
     /// 레터박스를 움직이는 함수
     /// </summary>
     /// <param name="value">값이 0일 때 레터박스가 사라지고 1일 때 보임</param>
     private void LetterBoxMove(float value)
     {
-        _letterBox[1].anchoredPosition = Vector2.Lerp(new Vector2(_letterBox[1].anchoredPosition.x, -150),
-            new Vector2(_letterBox[1].anchoredPosition.x, 0), value);
+        _letterBox[0].anchoredPosition = Vector2.Lerp(new Vector2(_letterBox[0].anchoredPosition.x, -150),
+            new Vector2(_letterBox[0].anchoredPosition.x, 0), value);
         
-        _letterBox[2].anchoredPosition = Vector2.Lerp(new Vector2(_letterBox[2].anchoredPosition.x, 150),
-            new Vector2(_letterBox[2].anchoredPosition.x, 0), value);
+        _letterBox[1].anchoredPosition = Vector2.Lerp(new Vector2(_letterBox[1].anchoredPosition.x, 150),
+            new Vector2(_letterBox[1].anchoredPosition.x, 0), value);
+    }
+
+    public void SetPanelPos(Vector3 pos)
+    {
+        _fixedPanelVec = Camera.main.WorldToScreenPoint(pos);
+    }
+
+    public void SetActiveTalkPanel(bool isActive)
+    {
+        _TalkPanel.SetActive(isActive);
+
+        if (!isActive) IsTalking = false;
     }
 }

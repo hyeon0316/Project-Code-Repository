@@ -16,17 +16,12 @@ public enum KeyIcons
 }
 public class Tutorial : MonoBehaviour
 {
-    private Player _player;
     public GameObject[] Keys;
     public GameObject ManualWindow;
     public GameObject PracticeEnemy;
-    public GameObject PlayerUICanvas;
     public Item DropItem;
     
-    private void Awake()
-    {
-        _player = FindObjectOfType<Player>();
-    }
+
 
     private void Start()
     {
@@ -38,6 +33,7 @@ public class Tutorial : MonoBehaviour
         TargetPlayer();
         SwitchOffKey();
     }
+
 
     private void SwitchOffKey()
     {
@@ -101,7 +97,7 @@ public class Tutorial : MonoBehaviour
         {
             if (Keys[i].activeSelf)
             {
-                Keys[i].transform.position = _player.transform.position + Vector3.up;
+                Keys[i].transform.position =PlayerManager.Instance.Player.transform.position + Vector3.up;
                 break;
             }
         }

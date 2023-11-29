@@ -2,18 +2,17 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum AttackHitSoundType
+public enum HitSoundType
 {
     XHit,
     ZHit1,
     ZHit2,
     AHit,
     SHit,
-    Empty
 }
 public class PlayerAttack : MonoBehaviour
 {
-    public AttackHitSoundType Type;
+    public HitSoundType Type;
     private bool _canAttack = false;
 
     public GameObject Player;
@@ -79,14 +78,15 @@ public class PlayerAttack : MonoBehaviour
     /// 적 히트 성공시 따로 필요한 사운드 재생
     /// </summary>
     /// <param name="type"></param>
-    public void SelectHitSound(AttackHitSoundType type)
+    public void SelectHitSound(HitSoundType type)
     {
         for (int i = 0; i < hitEnemyObj.Count; i++)
         {
             if (hitEnemyObj[i] == null) continue;
-            hitEnemyObj[i].GetComponent<I_hp>().SelectHit(type);
+            //hitEnemyObj[i].GetComponent<Life>().SelectHit(type);
         }
     }
+
     public void HitEnemy(float coefficient)
     {
         bool hitBoss = false;
@@ -105,7 +105,7 @@ public class PlayerAttack : MonoBehaviour
             {
                 if (hitEnemyObj[i] == null) continue;
                 float beforehp = hitEnemyObj[i].GetComponent<Life>().HpRatio;
-                if (hitEnemyObj[i].GetComponent<I_hp>().Gethit(Player.GetComponent<Life>().Power, coefficient))
+                if (hitEnemyObj[i].GetComponent<Life>().GetDamage(Player.GetComponent<Life>().Power, coefficient))
                 {
                     if (hitBoss)
                     {
@@ -144,18 +144,18 @@ public class PlayerAttack : MonoBehaviour
                 
 
                 Debug.Log("넉백");
-                StartCoroutine(hitEnemyObj[i].GetComponent<Life>().Navstop(0.14f * Power));
-                StartCoroutine(hitEnemyObj[i].GetComponent<Life>().AnimStop((0.133f - Time.deltaTime) * Power));
+                StartCoroutine(hitEnemyObj[i].GetComponent<Enemy>().StopNavCo(0.14f * Power));
+                StartCoroutine(hitEnemyObj[i].GetComponent<Enemy>().StopAnim((0.133f - Time.deltaTime) * Power));
               
                 if(id == 0) { 
-                    hitEnemyObj[i].GetComponent<Life>().KnockBackRight(transform.localScale, Power);
+                    hitEnemyObj[i].GetComponent<Enemy>().KnockBackRight(transform.localScale, Power);
                 }
                 else if(id == 1)
                 {
-                    hitEnemyObj[i].GetComponent<Life>().KnockBackUp(transform.localScale, Power);
+                    hitEnemyObj[i].GetComponent<Enemy>().KnockBackUp(transform.localScale, Power);
                 }else if(id == 2)
                 {
-                    hitEnemyObj[i].GetComponent<Life>().KnockBackRightUp(transform.localScale, Power);
+                    hitEnemyObj[i].GetComponent<Enemy>().KnockBackRightUp(transform.localScale, Power);
                 }
             }
         }
@@ -165,9 +165,9 @@ public class PlayerAttack : MonoBehaviour
     {
         for(int i = 0; i < hitEnemyObj.Count; i++)
         {
-            StartCoroutine(hitEnemyObj[i].GetComponent<Life>().AnimStop(time));
-            StartCoroutine(hitEnemyObj[i].GetComponent<Life>().GravityStop(time));
-            StartCoroutine(hitEnemyObj[i].GetComponent<Life>().Navstop(time+0.01f));
+            StartCoroutine(hitEnemyObj[i].GetComponent<Enemy>().StopAnim(time));
+            StartCoroutine(hitEnemyObj[i].GetComponent<Enemy>().StopGravityCo(time));
+            StartCoroutine(hitEnemyObj[i].GetComponent<Enemy>().StopNavCo(time+0.01f));
         }
     }
 

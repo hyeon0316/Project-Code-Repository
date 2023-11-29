@@ -17,7 +17,7 @@ public class EnemyAttack : MonoBehaviour
    public void Attackhit(float coefficient)
     {
         Debug.Log("공격에니메이션실행");
-        this.transform.parent.GetComponent<I_EnemyControl>().EnemyAttack(coefficient);
+        this.transform.parent.GetComponent<IEnemyAttack>().Attack(coefficient);
     }
 
     public void RangedAttack()
@@ -28,7 +28,7 @@ public class EnemyAttack : MonoBehaviour
     public void ThisGethit(float Cvalue)
     {
         float Beforehp = this.transform.parent.GetComponent<Life>().HpRatio;
-        if (this.transform.parent.GetComponent<I_hp>().Gethit(Cvalue,1))
+        if (this.transform.parent.GetComponent<Life>().GetDamage(Cvalue,1))
         {
             //회복이라서 true 를 탈꺼 같지는 않은데 만약 채력을 소모해서 사용하는 과정에서 자살이라도 한다면 사용
             GameObject.Find("Canvas(Enemy)").GetComponent<EnemyHpbar>().SwitchHPbar(this.transform.parent.GetComponent<Life>().LifeId, this.transform.parent.GetComponent<Life>().HpRatio, Beforehp,true);

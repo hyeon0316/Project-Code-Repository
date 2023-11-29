@@ -7,7 +7,7 @@ public class GoLobby : MonoBehaviour
 {
    private void OnEnable()
    {
-      FindObjectOfType<SoundManager>().Clear();
+      SoundManager.Instance.Clear();
       SceneManager.LoadScene("Menu");
    }
 }

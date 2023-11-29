@@ -1,53 +1,42 @@
-﻿using System;
+﻿using Cysharp.Threading.Tasks;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
 public  class Prison : Interaction
 {
-    private FadeImage _fade;
-    private bool _isPrison;
-    protected override void Awake()
-    {
-        _fade = FindObjectOfType<FadeImage>();
-        base.Awake();
-    }
-    private void Update()
-    {
-        if (GameObject.Find("EnemyPos_Second").transform.childCount == 0)
-        {
-            this.GetComponent<BoxCollider>().enabled = true;
-        }
-
-        StartInteract();
-    }
+    [SerializeField] private GameObject _closeDoorObj;
+    [SerializeField] private GameObject _openDoorObj;
+    [SerializeField] private GameObject _jumpMapLockObj;
+    [SerializeField] private Transform _npcEscapePos;
 
     public override void StartInteract()
     {
-        if (CanInteract)
-        {
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-                FindObjectOfType<Player>().PlayerAnim.SetBool("IsRun", false);
-                FindObjectOfType<SoundManager>().Play("Object/PrisonOpen",SoundType.Effect);
-                _fade.FadeIn();
-                FindObjectOfType<Player>().IsStop = true;
-                FindObjectOfType<Inventory>().DeleteMaterial();
-                ActionBtn.SetActive(false);
-                CanInteract = false;
-                _isPrison = true;
-            }
-        }
-        if (_fade.IsFade && _isPrison)
-        {
-            FindObjectOfType<NpcTalk>().transform.position = GameObject.Find("EscapePos").transform.position;
-                
-            _fade.FadeOut();
-            FindObjectOfType<Player>().IsStop = false;
-            GameObject.Find("JumpMapUnlock").SetActive(false);
-            GameObject.Find("PrisonDoorClose").SetActive(false);
-            GameObject.Find("Prison").transform.Find("PrisonDoorOpen").gameObject.SetActive(true);
-            this.gameObject.SetActive(false);
-        }
+        PlayerManager.Instance.Player.StopMove();
+        SoundManager.Instance.Play("Object/PrisonOpen", SoundType.Effect);
+        FadeManager.Instance.FadeInAsync().ContinueWith(OpenPrison).Forget();
+        PlayerManager.Instance.Inventory.ClearMaterial();
+    }
+
+    private void OpenPrison()
+    {
+        DialogueManager.Instance.CurNpc.transform.position = _npcEscapePos.position;
+        FadeManager.Instance.FadeOut();
+        PlayerManager.Instance.Player.ReMove();
+        _jumpMapLockObj.SetActive(false);
+        _closeDoorObj.SetActive(false);
+        _openDoorObj.gameObject.SetActive(true);
+        this.gameObject.SetActive(false);
+    }
+
+    public void ActivePrison()
+    {
+        this.GetComponent<BoxCollider>().enabled = true;
+    }
+
+    public void GetPrisonKey()
+    {
+        PlayerManager.Instance.Inventory.AddMaterial("PrisonKey");
     }
 }

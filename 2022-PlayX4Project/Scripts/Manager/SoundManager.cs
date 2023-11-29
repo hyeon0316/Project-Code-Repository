@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Security.Cryptography;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -22,76 +23,33 @@ public enum SoundType
     MaxCount, 
 }
 
-public class SoundManager : MonoBehaviour
+public class SoundManager : Singleton<SoundManager>
 {
     private AudioSource[] _audioSources = new AudioSource[(int) SoundType.MaxCount];
     private Dictionary<string, AudioClip> _audioClips = new Dictionary<string, AudioClip>();
 
-    private static SoundManager _instance = null;
-
-    public static SoundManager Instance()
-    {
-        return _instance;
-    }
-
     private void Awake()
-    {
-        if (_instance == null)
-        {
-            _instance = this;
-            DontDestroyOnLoad(this.gameObject);
-        }
-        else 
-        {
-            if (this != _instance)
-            {
-                Destroy(this.gameObject);
-            }
-        }
-    }
-
-    private void Start()
     {
         Init();
     }
 
-    private void Update()
-    {
-        if (!SceneManager.GetActiveScene().name.Equals("Menu") && !SceneManager.GetActiveScene().name.Contains("Test"))
-        {
-            _audioSources[0].volume = FindObjectOfType<SystemBase>().BgmSlider.value;
-            _audioSources[1].volume = FindObjectOfType<SystemBase>().EffectSlider.value;
-        }
-    }
-
     public void Init()
     {
-        GameObject root = GameObject.Find("@Sound");
+        string[] soundNames = System.Enum.GetNames(typeof(SoundType)); // "Bgm", "Effect"
 
-        if (root == null)
+        for (int i = 0; i < soundNames.Length - 1; i++)
         {
-            root = new GameObject {name = "@Sound"};
-            DontDestroyOnLoad(root); //게임 내내 유지
-
-            string[] soundNames = System.Enum.GetNames(typeof(SoundType)); // "Bgm", "Effect"
-
-            for (int i = 0; i < soundNames.Length - 1; i++)
-            {
-                GameObject go = new GameObject {name = soundNames[i]};
-                _audioSources[i] = go.AddComponent<AudioSource>();
-                go.transform.parent = root.transform;
-            }
-
-            _audioSources[(int) SoundType.Bgm].loop = true; // bgm 재생기는 무한 반복 재생
+            GameObject go = new GameObject { name = soundNames[i] };
+            _audioSources[i] = go.AddComponent<AudioSource>();
+            go.transform.parent = this.transform;
         }
+
+        _audioSources[(int)SoundType.Bgm].loop = true; // bgm 재생기는 무한 반복 재생
     }
 
     /// <summary>
     /// 사운드 재생 시 사용 될 함수
     /// </summary>
-    /// <param name="path"></param>
-    /// <param name="type"></param>
-    /// <param name="pitch"></param>
     public void Play(string path, SoundType type, float pitch =1.0f)
     {
         AudioClip audioClip = GetOrAddAudioClip(path, type);
@@ -159,9 +117,6 @@ public class SoundManager : MonoBehaviour
         return audioClip;
     }
     
-    /// <summary>
-    /// 게임이 오래 지속 될때 새로운 사운드가 계속 추가되어 많아져서 한번 초기화가 필요할때 쓰이는 함수
-    /// </summary>
     public void Clear()
     {
         foreach (AudioSource audioSource in _audioSources)
@@ -170,6 +125,38 @@ public class SoundManager : MonoBehaviour
             audioSource.Stop();
         }
         _audioClips.Clear();
+    }
+
+    public void PlayHitSound(HitSoundType type)
+    {
+        switch (type)
+        {
+            case HitSoundType.ZHit1:
+                SoundManager.Instance.Play("Player/ZAttackHit1", SoundType.Effect);
+                break;
+            case HitSoundType.ZHit2:
+                SoundManager.Instance.Play("Player/ZAttackHit2", SoundType.Effect);
+                break;
+            case HitSoundType.XHit:
+                SoundManager.Instance.Play("Player/XAttackHit", SoundType.Effect);
+                break;
+            case HitSoundType.AHit:
+                SoundManager.Instance.Play("Player/BulletHit", SoundType.Effect);
+                break;
+            case HitSoundType.SHit:
+                SoundManager.Instance.Play("Player/DashAttackHit", SoundType.Effect);
+                break;
+        }
+    }
+
+    public void ApplyBgmVolume(float bgm)
+    {
+        _audioSources[0].volume = bgm;
+    }
+
+    public void ApplyEffectVolume(float effect)
+    {
+        _audioSources[1].volume = effect;
     }
 }
 

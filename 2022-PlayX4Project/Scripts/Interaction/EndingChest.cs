@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Cysharp.Threading.Tasks;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -6,45 +7,31 @@ using UnityEngine.SceneManagement;
 
 public class EndingChest : Interaction
 {
-   private FadeImage _fade;
-   protected override void Awake()
-   {
-      base.Awake();
-      FindObjectOfType<EndingChest>().GetComponent<BoxCollider>().enabled = false;
-      _fade = GameObject.Find("Canvas").transform.Find("FadeImage").GetComponent<FadeImage>();
-   }
 
-   private void Update()
-   {
-      StartInteract();
-   }
+    private void Awake()
+    {
+        this.GetComponent<BoxCollider>().enabled = false;
+        GameEvent.EnableEndingChestEvent += EnableChest;
+    }
 
-   public override void StartInteract()
-   {
+    public override void StartInteract()
+    {
+        SoundManager.Instance.Play("EndingBGM", SoundType.Bgm);
+        PlayerManager.Instance.Inventory.ClearMaterial();
+        this.GetComponent<Animator>().SetTrigger("Open");
+        FadeManager.Instance.FadeInAsync().ContinueWith(GoEnding).Forget();
+    }
 
-      if (GameObject.Find("SummonEnemysTr").transform.childCount == 0 &&
-          FindObjectOfType<GameManager>().EnemyPos[3].transform.childCount == 0)
-      {
-         FindObjectOfType<EndingChest>().GetComponent<BoxCollider>().enabled = true;
+    private void GoEnding()
+    {
+        GameEvent.EnableEndingChestEvent -= EnableChest;
+        SceneManager.LoadScene("Ending");
+        Destroy(PlayerManager.Instance.gameObject);
+    }
 
-         if (CanInteract)
-         {
-            ActionBtn.transform.position = this.transform.position + new Vector3(0, 2f, 0);
-            if (Input.GetKeyDown(KeyCode.Space))
-            {
-               FindObjectOfType<Inventory>().DeleteMaterial();
-               _fade.FadeIn();
-               this.GetComponent<Animator>().SetTrigger("Open");
-               CanInteract = false;
-               FindObjectOfType<SoundManager>().Play("EndingBGM", SoundType.Bgm);
-               Invoke("GoEnding", 1f);
-            }
-         }
-      }
-   }
+    private void EnableChest()
+    {
+        this.GetComponent<BoxCollider>().enabled = true;
+    }
 
-   private void GoEnding()
-   {
-      SceneManager.LoadScene("Ending");
-   }
 }

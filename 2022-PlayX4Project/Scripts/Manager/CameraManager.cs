@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class CameraManager : MonoBehaviour
+public class CameraManager : Singleton<CameraManager>
 {
     /*
 1.public으로 선언 된 변수는 앞글자 대문자로 시작
@@ -15,13 +15,12 @@ public class CameraManager : MonoBehaviour
 */
     //카메라 음직임 타입 테스트가 끝나면 사용하는 함수와 함께 주석
     public int CameraMovetype = 0;
-    //플레이어 게임 오브젝트
-    public GameObject Target;
     //백그라운드 오브젝트
     public GameObject BackgroundImg;
     //v2를 사용할 경우 카메라가 플레이어를 느리게 따라가는데 그 따라가는 속도롤 결정(0.1~ 0.04 사이로 생각)
     public float CameraMoveSpeed;
 
+    private GameObject _taget;
     //카메라 크기
     private Vector2 _cameraSize;
     //백그라운드의 최대값
@@ -40,18 +39,12 @@ public class CameraManager : MonoBehaviour
     public float MinCameratoPlayerY = 0.45f;
 
     
-    // Start is called before the first frame update
-    public void Start()
+    public void Init()
     {
-      /*
-        orthographic 카메라와 perspective 카메라를 분리하여 2d 카메라와 3d 카메라 를 분리했다.
-      */
         _cameraSize.y = transform.GetChild(0).GetComponent<Camera>().orthographicSize;
         _cameraSize.x = _cameraSize.y * transform.GetChild(0).GetComponent<Camera>().aspect;
 
         BackgroudUpdate();
-
-       
     }
 
 
@@ -63,13 +56,13 @@ public class CameraManager : MonoBehaviour
     public void BackgroudUpdate()
     {
         
-        BackgroundImg = GameObject.Find("Background");
+        BackgroundImg = GameObject.Find("Background"); 
         _maxsize = new Vector2(BackgroundImg.GetComponent<MeshRenderer>().bounds.max.x,
             BackgroundImg.GetComponent<MeshRenderer>().bounds.max.y);
         _minsize = new Vector2(BackgroundImg.GetComponent<MeshRenderer>().bounds.min.x,
             BackgroundImg.GetComponent<MeshRenderer>().bounds.min.y);
 
-        FloorCollider = GameObject.Find("FloorCollider").GetComponent<BoxCollider>();
+        FloorCollider = GameObject.Find("FloorCollider").GetComponent<BoxCollider>(); 
         _maxsize = new Vector3(BackgroundImg.GetComponent<MeshRenderer>().bounds.max.x,
             BackgroundImg.GetComponent<MeshRenderer>().bounds.max.y, FloorCollider.bounds.max.z - 1.5f);
 
@@ -128,7 +121,7 @@ public class CameraManager : MonoBehaviour
     /// </summary>
     private void CameraMove_v1()
     {
-        Vector2 playerposition = MaxMinSize(new Vector2(Target.transform.position.x, Target.transform.position.y));
+        Vector2 playerposition = MaxMinSize(new Vector2(_taget.transform.position.x, _taget.transform.position.y));
 
         
         this.transform.position = new Vector3( playerposition.x, playerposition.y + 2 ,this.transform.position.z );
@@ -139,7 +132,7 @@ public class CameraManager : MonoBehaviour
     /// </summary>
     private void CameraMove_v2()
     {
-        Vector3 playerposition = MaxMinSize(new Vector3(Target.transform.position.x, Target.transform.position.y + 1.8f,Target.transform.position.z - 4.5f));
+        Vector3 playerposition = MaxMinSize(new Vector3(_taget.transform.position.x, _taget.transform.position.y + 1.8f,_taget.transform.position.z - 4.5f));
 
         //플레이어가 카메라 화면 좌우로 일정 이상 나간다면 카메라 위치를 다시 잡아주는 라인
         if(OutPlayertoCameraX())
@@ -162,7 +155,7 @@ public class CameraManager : MonoBehaviour
     /// <returns>플레이어가 일정량 이상 나갔다면 true 아니면 false를 반환한다.</returns>
     private bool OutPlayertoCameraX()
     {
-        Vector3 P_position = Camera.main.WorldToScreenPoint(Target.transform.position);
+        Vector3 P_position = Camera.main.WorldToScreenPoint(_taget.transform.position);
         Vector2 cameraScale = new Vector2(Camera.main.pixelWidth, Camera.main.pixelHeight);
 
 
@@ -178,7 +171,7 @@ public class CameraManager : MonoBehaviour
     /// <returns>플레이어가 일정량 이상 나갔다면 true 아니면 false를 반환한다.</returns>
     private bool OutPlayertoCameraY()
     {
-        Vector3 P_position = Camera.main.WorldToScreenPoint(Target.transform.position);
+        Vector3 P_position = Camera.main.WorldToScreenPoint(_taget.transform.position);
         Vector2 cameraScale = new Vector2(Camera.main.pixelWidth, Camera.main.pixelHeight);
 
         
@@ -190,6 +183,9 @@ public class CameraManager : MonoBehaviour
         return false;
     }
 
-
+    public void SetTarget(GameObject obj)
+    {
+        _taget = obj;
+    }
 
 }

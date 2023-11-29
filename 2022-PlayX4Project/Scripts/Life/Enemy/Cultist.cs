@@ -2,23 +2,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Cultist : Life, I_hp, I_EnemyControl
+public class Cultist : Enemy, IEnemyMove, IEnemyAttack
 {
-    static public GameObject PlayerObj;
-
-    public GameObject BloodPrefab;
-
     private Enemystate Enemystate;
 
-    public Enemystate _enemystate
-    {
-        get { return Enemystate; }
-        set { Enemystate = value; }
-    }
-
     private float _attackDelay;
-
-    public Animator Animator;
 
     private EnemyAttack _enemyAttack;
 
@@ -29,16 +17,13 @@ public class Cultist : Life, I_hp, I_EnemyControl
     public GameObject[] FireballMem = new GameObject[10];
 
     // Start is called before the first frame update
-    private void Awake()
+    protected override void Awake()
     {
-        Initdata(2,DataManager.Instance().Data.CultistHp, DataManager.Instance().Data.CultistPower, DataManager.Instance().Data.CultistSpeed);//데이터 입력
+        base.Awake();
         Enemystate = Enemystate.Attack;
-        PlayerObj = GameObject.Find("Player");
-        Animator = this.GetComponentInChildren<Animator>();
         _enemyAttack = this.GetComponentInChildren<EnemyAttack>();
         _EnemyNav = this.GetComponent<UnityEngine.AI.NavMeshAgent>();
         _EnemyNav.stoppingDistance = Attackcrossroad;
-        
     }
 
     // Update is called once per frame
@@ -53,7 +38,7 @@ public class Cultist : Life, I_hp, I_EnemyControl
 
                 FindPlayer();
                 Fieldofview();
-                EnemyMove();
+                Moving();
                 if(Enemystate != Enemystate.Attack)
                     LookPlayer();
             }
@@ -64,26 +49,26 @@ public class Cultist : Life, I_hp, I_EnemyControl
 
     public void FindPlayer()
     {
-        if (Vector3.Distance(PlayerObj.transform.position, this.transform.position) < 5f)
+        if (Vector3.Distance(PlayerManager.Instance.Player.transform.position, this.transform.position) < 5f)
         {
             if (Enemystate != Enemystate.Attack)
             {
                 if (_attackDelay <= 0) { 
                 
                     Enemystate = Enemystate.Find;
-                    Animator.SetBool("isWalk", true);
+                    _anim.SetBool("isWalk", true);
                 }
                 else
                 {
                     Enemystate = Enemystate.Idle;
-                    Animator.SetBool("isWalk", false);
+                    _anim.SetBool("isWalk", false);
                 }
             }
         }
         else
         {
             Enemystate = Enemystate.Idle;
-            Animator.SetBool("isWalk", false);
+            _anim.SetBool("isWalk", false);
         }
     }
 
@@ -91,20 +76,20 @@ public class Cultist : Life, I_hp, I_EnemyControl
     {
         if (Enemystate == Enemystate.Find)
         {
-            if (Mathf.Abs(PlayerObj.transform.position.z - this.transform.position.z) < 0.3f)
+            if (Mathf.Abs(PlayerManager.Instance.Player.transform.position.z - this.transform.position.z) < 0.3f)
             {
                 if (_attackDelay <= 0)
                 {
                     _attackDelay = 5f;
                     Enemystate = Enemystate.Attack;
-                    Animator.SetTrigger("AttackTrigger");
+                    _anim.SetTrigger("AttackTrigger");
                 }
             }
         }
         if (Enemystate == Enemystate.Attack)
         {
-            if ((Animator.GetCurrentAnimatorStateInfo(0).IsName("Cultist_Attack") || Animator.GetCurrentAnimatorStateInfo(0).IsName("Cultist_farawayAttack"))
-                && Animator.GetCurrentAnimatorStateInfo(0).normalizedTime > 0.8f)
+            if ((_anim.GetCurrentAnimatorStateInfo(0).IsName("Cultist_Attack") || _anim.GetCurrentAnimatorStateInfo(0).IsName("Cultist_farawayAttack"))
+                && _anim.GetCurrentAnimatorStateInfo(0).normalizedTime > 0.8f)
             {
                 Enemystate = Enemystate.Find;
             }
@@ -117,85 +102,13 @@ public class Cultist : Life, I_hp, I_EnemyControl
 
     private IEnumerator BloodCo()
     {
-        GameObject obj = Instantiate(BloodPrefab, this.transform.position, Quaternion.identity);
+        GameObject obj = Instantiate(CachingManager.Instance().BloodObj, this.transform.position, Quaternion.identity);
         obj.transform.localScale = new Vector3(0.7f, 0.7f, 0.7f);
         yield return new WaitForSeconds(0.7f);
         Destroy(obj);
     }
     
-    public void SelectHit(AttackHitSoundType type)
-    {
-        switch (type)
-        {
-            case AttackHitSoundType.ZHit1:
-                FindObjectOfType<SoundManager>().Play("Player/ZAttackHit1",SoundType.Effect);
-                break;
-            case AttackHitSoundType.ZHit2:
-                FindObjectOfType<SoundManager>().Play("Player/ZAttackHit2",SoundType.Effect);
-                break;
-            case AttackHitSoundType.XHit:
-                FindObjectOfType<SoundManager>().Play("Player/XAttackHit",SoundType.Effect);
-                break;
-            case AttackHitSoundType.AHit:
-                FindObjectOfType<SoundManager>().Play("Player/BulletHit",SoundType.Effect);
-                break;
-            case AttackHitSoundType.SHit:
-                FindObjectOfType<SoundManager>().Play("Player/DashAttackHit",SoundType.Effect);
-                StartCoroutine(BloodCo());
-                break;
-        }
-    }
-
-    public bool Gethit(float Cvalue, float coefficient)
-    {
-        if (HP > 0)
-        {
-            if (Cvalue > 0)
-            {
-                if (_attackDelay < 0.06f)
-                    _attackDelay += 0.06f;
-                Animator.SetTrigger("Hitstart");
-            }
-            HP -= Cvalue * coefficient;
-            return CheckLiving();
-        }
-        return false;
-    }
-
-    public bool CheckLiving()
-    {
-        if (HP <= 0)
-        {
-            Animator.SetBool("Dead", true);
-            StartCoroutine(DeadAniPlayer());
-            return true;
-        }
-        else
-            return false;
-    }
-
-    public IEnumerator DeadAniPlayer()
-    {
-        Living = false;
-        Enemystate = Enemystate.Dead;
-        _EnemyNav.path.ClearCorners();
-        _EnemyNav.enabled = false;
-        while (true)
-        {
-            _EnemyNav.path.ClearCorners();
-            _EnemyNav.enabled = false;
-            if (Animator.GetCurrentAnimatorStateInfo(0).IsName("Cultist_Death")
-                && Animator.GetCurrentAnimatorStateInfo(0).normalizedTime >= 1f)
-            {
-                break;
-            }
-            yield return new WaitForEndOfFrame();
-        }
-        _EnemyNav.enabled = false;
-        Destroy(this.transform.gameObject, Time.deltaTime);
-    }
-
-    public void EnemyAttack(float coefficient)
+    public void Attack(float dmg)
     {
         int index = FireballMemorypool();
         GameObject InsFireball = FireballMem[index];
@@ -209,7 +122,7 @@ public class Cultist : Life, I_hp, I_EnemyControl
         {
             InsFireball.transform.rotation = new Quaternion(0, 0, 0, 0);
         }
-        InsFireball.GetComponent<FireBall>().Power = Power * coefficient;
+        InsFireball.GetComponent<FireBall>().Power = Power * dmg;
     }
 
     /// <summary>
@@ -228,7 +141,7 @@ public class Cultist : Life, I_hp, I_EnemyControl
         }
         return index;
     }
-    public void EnemyMove()
+    public void Moving()
     {
         if (Enemystate == Enemystate.Find)
         {
@@ -237,14 +150,14 @@ public class Cultist : Life, I_hp, I_EnemyControl
             {
                 _EnemyNav.speed = Speed;
                 Vector3 navPosition;
-                if (Vector3.Distance(this.transform.position, PlayerObj.transform.position) > 3f)
+                if (Vector3.Distance(this.transform.position,PlayerManager.Instance.Player.transform.position) > 3f)
                 {
-                    navPosition = PlayerObj.transform.position;
+                    navPosition =PlayerManager.Instance.Player.transform.position;
                 }
                 else
                 {
                     navPosition = new Vector3(this.transform.position.x, this.transform.position.y,
-                        PlayerObj.transform.position.z);
+                       PlayerManager.Instance.Player.transform.position.z);
                 }
                 _EnemyNav.SetDestination(navPosition);
             }
@@ -264,7 +177,7 @@ public class Cultist : Life, I_hp, I_EnemyControl
     {
         //적 보는 방향 전환라인
         Vector3 thisScale = new Vector3(2.5f, 2.5f, 1);
-        if (PlayerObj.transform.position.x > this.transform.position.x)
+        if (PlayerManager.Instance.Player.transform.position.x > this.transform.position.x)
         {
             this.transform.GetChild(0).localScale = new Vector3(-thisScale.x, thisScale.y, thisScale.z);
         }
@@ -273,5 +186,32 @@ public class Cultist : Life, I_hp, I_EnemyControl
             this.transform.GetChild(0).localScale = new Vector3(thisScale.x, thisScale.y, thisScale.z);
         }
     }
-    
+
+    protected override void CallDamageEvent()
+    {
+        if (_attackDelay < 0.06f)
+        {
+            _attackDelay += 0.06f;
+        }
+    }
+
+    protected override IEnumerator DeadEventCo()
+    {
+        Enemystate = Enemystate.Dead;
+        _EnemyNav.path.ClearCorners();
+        _EnemyNav.enabled = false;
+        while (true)
+        {
+            _EnemyNav.path.ClearCorners();
+            _EnemyNav.enabled = false;
+            if (_anim.GetCurrentAnimatorStateInfo(0).IsName("Cultist_Death")
+                && _anim.GetCurrentAnimatorStateInfo(0).normalizedTime >= 1f)
+            {
+                break;
+            }
+            yield return new WaitForEndOfFrame();
+        }
+        _EnemyNav.enabled = false;
+        Destroy(this.transform.gameObject, Time.deltaTime);
+    }
 }

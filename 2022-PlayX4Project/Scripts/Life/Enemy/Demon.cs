@@ -6,19 +6,9 @@ using UnityEngine;
 using UnityEngine.AI;
 using Random = UnityEngine.Random;
 
-public class Demon : Life, I_hp, I_EnemyControl
+public class Demon : Enemy, IEnemyMove, IEnemyAttack
 {
-    private Enemystate Enemystate;
-    public Enemystate _enemystate
-    {
-        get { return Enemystate; }
-        set { Enemystate = value; }
-    }
-    public GameObject BloodPrefab;
-
-    static public GameObject PlayerObj;
     private Enemystate _state;
-    public Animator Animator;
     private EnemyAttack _enemyAttack;
     private NavMeshAgent _enemyNav;
     public float Attackcrossroad;
@@ -45,36 +35,27 @@ public class Demon : Life, I_hp, I_EnemyControl
 
     private float _launchSkillTimer;
 
-    private void Awake()
+    protected override void Awake()
     {
-        PlayerObj = GameObject.Find("Player");
-        Animator = this.GetComponentInChildren<Animator>();
+        base.Awake();
         _enemyAttack = this.GetComponentInChildren<EnemyAttack>();
         _enemyNav = this.GetComponent<NavMeshAgent>();
         _enemyNav.stoppingDistance = Attackcrossroad;
 
         _spriteRenderer = this.GetComponentInChildren<SpriteRenderer>();
         _defaultMaterial = _spriteRenderer.material;
-    }
-
-    
-    
-    // Start is called before the first frame update
-    void Start()
-    {
         PollParent = GameObject.Find("BossEnemypollParent").transform;
         InitBomb(10);
         InitFireBall(20);
-        Initdata(101,DataManager.Instance().Data.DemonHp, DataManager.Instance().Data.DemonPower, DataManager.Instance().Data.DemonSpeed); //데이터 입력
         _state = Enemystate.Idle;
     }
+
 
     // Update is called once per frame
     void Update()
     {
-        
         Debug.Log(_state);
-        if (_state != Enemystate.Dead && !Animator.GetCurrentAnimatorStateInfo(0).IsName("Start"))
+        if (_state != Enemystate.Dead && !_anim.GetCurrentAnimatorStateInfo(0).IsName("Start"))
         {
             if (_attackDelay > 0)
                 _attackDelay -= Time.deltaTime;
@@ -82,12 +63,12 @@ public class Demon : Life, I_hp, I_EnemyControl
             LookPlayer();
             ChangeState();
         }
-        EnemyMove();
+        Moving();
     }
 
     public void OnDestroy()
     {
-        FindObjectOfType<Inventory>().AddMaterial("EndingKey");
+        PlayerManager.Instance.Inventory.AddMaterial("EndingKey");
     }
 
     private void InitBomb(int initCount)
@@ -214,13 +195,13 @@ public class Demon : Life, I_hp, I_EnemyControl
             {
                 time += Time.deltaTime;
                 
-                _useBomb[i].transform.position = Vector3.Slerp(_useBomb[i].transform.position, PlayerObj.transform.position + Vector3.down, 0.1f);
+                _useBomb[i].transform.position = Vector3.Slerp(_useBomb[i].transform.position,PlayerManager.Instance.Player.transform.position + Vector3.down, 0.1f);
                 yield return new WaitForFixedUpdate();
             }
         }
         //공중에 있는 폭탄이 플레이어를 약간 추적후 폭팔한다.
 
-        Animator.SetTrigger("Skill1");
+        _anim.SetTrigger("Skill1");
         yield return new WaitForSeconds(1f);
         Debug.Log("폭발!");
         
@@ -241,13 +222,13 @@ public class Demon : Life, I_hp, I_EnemyControl
 
     private void ChangeState()
     {
-        if (!Animator.GetCurrentAnimatorStateInfo(0).IsName("Skill1") && !Animator.GetCurrentAnimatorStateInfo(0).IsName("Skill2") &&
-            !Animator.GetCurrentAnimatorStateInfo(0).IsName("Skill3"))
+        if (!_anim.GetCurrentAnimatorStateInfo(0).IsName("Skill1") && !_anim.GetCurrentAnimatorStateInfo(0).IsName("Skill2") &&
+            !_anim.GetCurrentAnimatorStateInfo(0).IsName("Skill3"))
         {
             if (_state != Enemystate.Skill2)
             {
-                if(Vector3.Distance(PlayerObj.transform.position, this.transform.position) < 5f) { 
-                    if (Vector3.Distance(PlayerObj.transform.position, this.transform.position) < Attackcrossroad + 0.25f)
+                if(Vector3.Distance(PlayerManager.Instance.Player.transform.position, this.transform.position) < 5f) { 
+                    if (Vector3.Distance(PlayerManager.Instance.Player.transform.position, this.transform.position) < Attackcrossroad + 0.25f)
                     {
                         _areaSkillTimer += Time.deltaTime;
                         _teleportTimer = 0;
@@ -277,7 +258,7 @@ public class Demon : Life, I_hp, I_EnemyControl
                        _state = Enemystate.Find;
                        
                      }else {
-                            if(Mathf.Abs( PlayerObj.transform.position.z - transform.position.z ) < 0.3f) { 
+                            if(Mathf.Abs(PlayerManager.Instance.Player.transform.position.z - transform.position.z ) < 0.3f) { 
                                 _state = Enemystate.Range;
                             }
                             else
@@ -292,43 +273,42 @@ public class Demon : Life, I_hp, I_EnemyControl
         
         if (_areaSkillTimer >= 2f)
         {
-           // PlayerObj.GetComponent<Player>().KnockBack(this.transform.position);
+            PlayerManager.Instance.Player.KnockBack(this.transform.position);
             _state = Enemystate.Skill;
-            Animator.SetTrigger("Skill2");
+            _anim.SetTrigger("Skill2");
             _areaSkillTimer = 0;
-            //todo: 가능하면 플레이어가 넉백효과도 받을 수 있는 기능도 구현
         }
     }
-    public void EnemyMove()
+    public void Moving()
     {
         if (_state == Enemystate.Find)
         {
             _enemyNav.isStopped = false;
             _enemyNav.speed = Speed;
-            _enemyNav.SetDestination(PlayerObj.transform.position);
-            Animator.SetBool("IsWalk", true);
+            _enemyNav.SetDestination(PlayerManager.Instance.Player.transform.position);
+            _anim.SetBool("IsWalk", true);
         }
         else if (_state == Enemystate.Attack)
         {
             _enemyNav.isStopped = true;
-            Animator.SetBool("IsWalk", false);
-            Animator.SetTrigger("Attack");
+            _anim.SetBool("IsWalk", false);
+            _anim.SetTrigger("Attack");
             _attackDelay = 3f;
         }
         else if (_state == Enemystate.Idle)
         {
             _enemyNav.isStopped = true;
-            Animator.SetBool("IsWalk", false);
+            _anim.SetBool("IsWalk", false);
         }
         else if (_state == Enemystate.Dead)
         {
-            Animator.SetBool("IsWalk", false);
-            Animator.SetTrigger("Dead");
-            StartCoroutine(DeadAniPlayer());
+            _anim.SetBool("IsWalk", false);
+            _anim.SetTrigger("Dead");
+            //StartCoroutine(DeadAniPlayer());
         }
         else if (_state == Enemystate.Skill)
         {
-            Animator.SetBool("IsWalk", false);
+            _anim.SetBool("IsWalk", false);
             _attackDelay = 3f;
             _enemyNav.isStopped = true;
         }
@@ -338,7 +318,7 @@ public class Demon : Life, I_hp, I_EnemyControl
             
         }else if(_state == Enemystate.Range)
         {
-            Animator.SetTrigger("Fire1");
+            _anim.SetTrigger("Fire1");
             _attackDelay = 3f;
             _enemyNav.isStopped = true;
             
@@ -346,57 +326,10 @@ public class Demon : Life, I_hp, I_EnemyControl
     }
     private IEnumerator BloodCo()
     {
-        GameObject obj = Instantiate(BloodPrefab, this.transform.position, Quaternion.identity);
+        GameObject obj = Instantiate(CachingManager.Instance().BloodObj, this.transform.position, Quaternion.identity);
         obj.transform.localScale = new Vector3(1f, 1f, 1f);
         yield return new WaitForSeconds(0.7f);
         Destroy(obj);
-    }
-    public void SelectHit(AttackHitSoundType type)
-    {
-        switch (type)
-        {
-            case AttackHitSoundType.ZHit1:
-                FindObjectOfType<SoundManager>().Play("Player/ZAttackHit1",SoundType.Effect);
-                break;
-            case AttackHitSoundType.ZHit2:
-                FindObjectOfType<SoundManager>().Play("Player/ZAttackHit2",SoundType.Effect);
-                break;
-            case AttackHitSoundType.XHit:
-                FindObjectOfType<SoundManager>().Play("Player/XAttackHit",SoundType.Effect);
-                break;
-            case AttackHitSoundType.AHit:
-                FindObjectOfType<SoundManager>().Play("Player/BulletHit",SoundType.Effect);
-                break;
-            case AttackHitSoundType.SHit:
-                FindObjectOfType<SoundManager>().Play("Player/DashAttackHit",SoundType.Effect);
-                StartCoroutine(BloodCo());
-                break;
-        }
-    }
-    
-    public bool Gethit(float Cvalue, float coefficient)
-    {
-        if (_state != Enemystate.Dead)
-        {
-            if (Cvalue > 0)
-            {
-                int rand = Random.Range(0, 2);
-                switch (rand)
-                {
-                    case 0:
-                        FindObjectOfType<SoundManager>().Play("Enemy/Demon/DemonHit1",SoundType.Effect);
-                        break;
-                    case 1:
-                        FindObjectOfType<SoundManager>().Play("Enemy/Demon/DemonHit2",SoundType.Effect);
-                        break;
-                }
-                StartCoroutine(HitCo());
-                DropBomb();
-            }
-        }
-        HP -= Cvalue * coefficient;
-        
-        return CheckLiving();
     }
     
     private IEnumerator HitCo()
@@ -406,49 +339,16 @@ public class Demon : Life, I_hp, I_EnemyControl
         _spriteRenderer.material = _defaultMaterial;
     }
     
-    public bool CheckLiving()
-    {
-        if (HP <= 0)
-        {
-            _state = Enemystate.Dead;
-            return true;
-        }
-        else
-            return false;
-    }
-
-    public IEnumerator DeadAniPlayer()
-    {
-        Living = false;
-        PollParent.gameObject.SetActive(false);
-        _enemyNav.path.ClearCorners();
-        _enemyNav.enabled = false;
-        while (true)
-        {
-            _enemyNav.path.ClearCorners();
-            _enemyNav.enabled = false;
-            if (Animator.GetCurrentAnimatorStateInfo(0).IsName("Dead")
-                && Animator.GetCurrentAnimatorStateInfo(0).normalizedTime >= 1f)
-            {
-                break;
-            }
-            yield return new WaitForEndOfFrame();
-        }
-        _enemyNav.enabled = false;
-        Destroy(this.transform.gameObject, Time.deltaTime);
-    }
-
-    
     /// <summary>
     /// 실제 데미지를 주는 함수(공격 애니메이션 따로)
     /// </summary>
-    public void EnemyAttack(float coefficient)
+    public void Attack(float dmg)
     {
         if (_enemyAttack.IshitPlayer)
         {
             Debug.LogFormat("{0},{1}", this.name, "hit");
-            if(_state == Enemystate.Skill) PlayerObj.GetComponent<Player>().KnockBack(this.transform.position);
-            PlayerObj.GetComponent<I_hp>().Gethit(Power,coefficient);
+            if(_state == Enemystate.Skill)PlayerManager.Instance.Player.KnockBack(this.transform.position);
+           PlayerManager.Instance.Player.GetDamage(Power,dmg);
         }
     }
 
@@ -472,11 +372,11 @@ public class Demon : Life, I_hp, I_EnemyControl
     
     private void LookPlayer()
     {
-        if (!Animator.GetCurrentAnimatorStateInfo(0).IsName("Attack") && !Animator.GetCurrentAnimatorStateInfo(0).IsName("Skill1") &&
-            !Animator.GetCurrentAnimatorStateInfo(0).IsName("Skill2") && !Animator.GetCurrentAnimatorStateInfo(0).IsName("Skill3"))
+        if (!_anim.GetCurrentAnimatorStateInfo(0).IsName("Attack") && !_anim.GetCurrentAnimatorStateInfo(0).IsName("Skill1") &&
+            !_anim.GetCurrentAnimatorStateInfo(0).IsName("Skill2") && !_anim.GetCurrentAnimatorStateInfo(0).IsName("Skill3"))
         {
             Vector3 thisScale = new Vector3(2.5f, 2.5f, 1);
-            if (PlayerObj.transform.position.x > this.transform.position.x)
+            if (PlayerManager.Instance.Player.transform.position.x > this.transform.position.x)
             {
                 this.transform.GetChild(0).localScale = new Vector3(-thisScale.x, thisScale.y, thisScale.z);
             }
@@ -486,4 +386,42 @@ public class Demon : Life, I_hp, I_EnemyControl
             }
         }
     }
+
+    protected override void CallDamageEvent()
+    {
+        int rand = Random.Range(0, 2);
+        switch (rand)
+        {
+            case 0:
+                SoundManager.Instance.Play("Enemy/Demon/DemonHit1", SoundType.Effect);
+                break;
+            case 1:
+                SoundManager.Instance.Play("Enemy/Demon/DemonHit2", SoundType.Effect);
+                break;
+        }
+        StartCoroutine(HitCo());
+        DropBomb();
+    }
+
+    protected override IEnumerator DeadEventCo()
+    {
+        GameEvent.CallEndingChest();
+        PollParent.gameObject.SetActive(false);
+        _enemyNav.path.ClearCorners();
+        _enemyNav.enabled = false;
+        while (true)
+        {
+            _enemyNav.path.ClearCorners();
+            _enemyNav.enabled = false;
+            if (_anim.GetCurrentAnimatorStateInfo(0).IsName("Dead")
+                && _anim.GetCurrentAnimatorStateInfo(0).normalizedTime >= 1f)
+            {
+                break;
+            }
+            yield return new WaitForEndOfFrame();
+        }
+        _enemyNav.enabled = false;
+        Destroy(this.transform.gameObject, Time.deltaTime);
+    }
+
 }

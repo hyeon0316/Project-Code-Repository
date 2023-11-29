@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Cysharp.Threading.Tasks;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -14,30 +15,28 @@ public class Lobby : MonoBehaviour
     public GameObject ManualWindow;
     public GameObject ManualPages;
 
-    private float _textDelay = 0.1f;
-
     private void Start()
     {
-        FindObjectOfType<SoundManager>().Play("LobbyBGM",SoundType.Bgm);
-        DataManager.Instance().Save();
+        JsonToDataManager.Instance.Save().Forget();
+        SoundManager.Instance.Play("LobbyBGM",SoundType.Bgm);
     }
 
     public void StartGame()
     {
-        FindObjectOfType<SoundManager>().Play("Object/Button",SoundType.Effect);
-        FindObjectOfType<SoundManager>().Play("TutorialBGM",SoundType.Bgm);
-        DataManager.Instance().Load();
-        SceneManager.LoadScene("Tutorial");
+        SoundManager.Instance.Play("Object/Button",SoundType.Effect);
+        SoundManager.Instance.Play("TutorialBGM",SoundType.Bgm);
+        JsonToDataManager.Instance.Load().ContinueWith(() => SceneManager.LoadScene("Tutorial")).Forget(); 
     }
     
     public void ShowManual()
     {
-        FindObjectOfType<SoundManager>().Play("Object/Button",SoundType.Effect);
+        SoundManager.Instance.Play("Object/Button",SoundType.Effect);
         ManualWindow.SetActive(true);
     }
+
     public void ExitGame()
     {
-        FindObjectOfType<SoundManager>().Play("Object/Button",SoundType.Effect);
+        SoundManager.Instance.Play("Object/Button",SoundType.Effect);
         #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
         #else
@@ -47,7 +46,7 @@ public class Lobby : MonoBehaviour
     
     public void NextPageBtn()
     {
-        FindObjectOfType<SoundManager>().Play("Object/Button",SoundType.Effect);
+        SoundManager.Instance.Play("Object/Button",SoundType.Effect);
         if (ManualPages.transform.GetChild(0).gameObject.activeSelf)
         {
             BackButton.SetActive(true);
@@ -63,7 +62,7 @@ public class Lobby : MonoBehaviour
     }
     public void BackBtn()
     {
-        FindObjectOfType<SoundManager>().Play("Object/Button",SoundType.Effect);
+        SoundManager.Instance.Play("Object/Button",SoundType.Effect);
         ManualWindow.SetActive(false);
     }
 }

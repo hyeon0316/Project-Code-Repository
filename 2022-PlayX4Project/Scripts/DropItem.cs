@@ -20,9 +20,9 @@ public class DropItem : MonoBehaviour
     {
         if (_canGet)
         {
-            this.transform.position += (FindObjectOfType<Player>().transform.position - this.transform.position) * 0.03f;
+            this.transform.position += (PlayerManager.Instance.Player.transform.position - this.transform.position) * 0.03f;
 
-            if (Vector3.Distance(this.transform.position, FindObjectOfType<Player>().transform.position) < 0.4f)
+            if (Vector3.Distance(this.transform.position,PlayerManager.Instance.Player.transform.position) < 0.4f)
             {
                 Destroy(this.gameObject);
                 _canGet = false;
@@ -51,12 +51,5 @@ public class DropItem : MonoBehaviour
 
         _canGet = true;
         yield return null;
-    }
-
-   
-
-    private void DelayGetItem()
-    {
-        _canGet = true;
     }
 }
