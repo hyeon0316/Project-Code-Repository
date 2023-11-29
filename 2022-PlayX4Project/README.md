@@ -20,29 +20,43 @@
 
 - ### hyeon0316(김현진)
     #### 주요 시도 및 구현 목록 
-    - 유니티 패키지에 포함된 `시네머신`을 활용하여 중간 스토리 진행씬 및 엔딩씬 제작
-    - `json`데이터 파싱을 활용하여 게임 전시 중에도 실시간으로 게임의 전체적인 벨런스 조절 가능하도록 조성
-    - `오브젝트 풀링`을 사용하여 불필요한 GC 호출 방지
-    - `코루틴 및 재귀함수`를 사용한 적들의 랜덤 패턴 구현 
-    - 게임의 퀄리티를 상승 시키기 위해 유니티의 `포스트 프로세싱` 사용
-    - 현재 캐릭터가 존재하지 않는 구역의 경우 렌더링 작업을 비활성화(큰 맵 방지)
-    - 자료구조 `Queue`를 사용하여 NPC 대화 관리
-    - 전체적인 상호작용 구조물(NPC, 상자, 문, 포탈 등)을 `추상 클래스`로 작성하여 재정의
-    - `인터페이스`를 사용하여 다중상속 지원
+    - 게임 시연 중 빠른 벨런스 패치를 위한 `json` 데이터 관리
+    - `코루틴 및 재귀함수`를 사용한 적 패턴 구현 
+    - 플레이어와 적, 상호작용 오브젝트 `상속` 및 `인터페이스` 활용 구조 설계
+    - Npc 대화 매니저, 사운드 매니저, 페이드 매니저 구현
     - `ScriptableObject`를 사용하여 아이템 데이터 관리 
+    - 유니티 `시네머신`을 활용하여 중간 스토리 컷씬 및 엔딩씬 제작
+    - 유니티 `포스트 프로세싱` 사용
+      
+    #### 리팩토링 목록
+    - 무분별한 GetComponent, FindObjectType, GameObject.Find 사용 수정
+    - 상속 구조 개선, 코드 중복 최소화
+    - 비동기 처리 및 코드 가독성 향상을 위한 `UniTask` 사용
+    - 클래스 간 결합도를 낮추기 위한 `event` 사용
+
 
     #### 코드 목록
-    - 스토리 진행 관리
-      https://github.com/hyeon0316/Project-Code-Repository/blob/cd8f4c55166b0f1af90b5fd4822ef1ce2dd77efb/2022-PlayX4Project/Scripts/Manager/DialogueManager.cs#L99-L151
+    - 대화 진행 관리
+      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Manager/DialogueManager.cs#L44-L64
+      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Manager/DialogueManager.cs#L72-L110
+      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Manager/DialogueManager.cs#L179-L194
       <br/>
-    - 상호작용 구조물 추상클래스 작성
-      https://github.com/hyeon0316/Project-Code-Repository/blob/cd8f4c55166b0f1af90b5fd4822ef1ce2dd77efb/2022-PlayX4Project/Scripts/Interaction/Interaction.cs#L6-L41
+    - json 데이터 관리
+      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Manager/JsonToDataManager.cs#L16-L50
+    - Fade 시스템
+      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Manager/FadeManager.cs#L16-L66
       <br/>
-    - 오브젝트 풀(자료구조 Queue로 관리)
-      https://github.com/hyeon0316/Project-Code-Repository/blob/cd8f4c55166b0f1af90b5fd4822ef1ce2dd77efb/2022-PlayX4Project/Scripts/Life/Enemy/Demon.cs#L93-L153
+    - 캐릭터 구조
+      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Life/Life.cs#L19-L84
+      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Life/Enemy/ILifePattern.cs#L2-L10
+      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Life/Enemy/EnemyAttack.cs#L17-L21
       <br/>
-    - 재귀함수를 사용한 랜덤 패턴
-      https://github.com/hyeon0316/Project-Code-Repository/blob/cd8f4c55166b0f1af90b5fd4822ef1ce2dd77efb/2022-PlayX4Project/Scripts/Life/Enemy/Necromancer.cs#L80-L116
+    - 상호작용 오브젝트 구조
+      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Interaction/Interaction.cs#L6-L53
+      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Interaction/Npc.cs#L6-L73
+      <br/>
+    - 적 패턴 구현
+      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Life/Enemy/Necromancer.cs#L30-L99
       <br/>
    
       
