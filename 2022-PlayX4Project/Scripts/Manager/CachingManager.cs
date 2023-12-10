@@ -11,6 +11,7 @@ public class CachingManager : MonoBehaviour
     public GameObject BringerSkillObj;
     public GameObject BloodObj;
     public Npc SecondFloorNpc;
+    public GameObject PortalObj;
 
     public static CachingManager Instance()
     {

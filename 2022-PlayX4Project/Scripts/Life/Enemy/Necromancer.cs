@@ -14,7 +14,6 @@ public class Necromancer : Enemy, IEnemyMove
     private NavMeshAgent _enemyNav;
     private int _selectPattern;
     private bool _canSpecialSummon;
-    public GameObject Portal;
     public static bool IsSkill;
     public float summonTime;
 
@@ -24,12 +23,11 @@ public class Necromancer : Enemy, IEnemyMove
         summonTime = 10f;
         _canSpecialSummon = true;
         _enemyNav = this.GetComponent<NavMeshAgent>();
-        Portal = GameObject.Find("PortalParent");
     }
 
     private void Start()
     {
-        Moving();
+        InvokeRepeating(nameof(Moving), 2.5f, 2.5f);
     }
 
     private void Update()
@@ -95,7 +93,6 @@ public class Necromancer : Enemy, IEnemyMove
             default:
                 break;
         }
-        Invoke(nameof(Moving), 2.5f);
     }
 
     private void LookPlayer()
@@ -125,7 +122,7 @@ public class Necromancer : Enemy, IEnemyMove
         _anim.SetBool("IsWalk", false);
         _anim.SetTrigger("Skill2");
         yield return new WaitForSeconds(_anim.GetCurrentAnimatorStateInfo(0).length);
-        Portal.transform.GetChild(0).gameObject.SetActive(true);
+        CachingManager.Instance().PortalObj.transform.GetChild(0).gameObject.SetActive(true);
         _anim.SetBool("IsWalk", true);
     }
 
@@ -140,9 +137,9 @@ public class Necromancer : Enemy, IEnemyMove
         _anim.SetBool("IsWalk", false);
         _anim.SetTrigger("Skill1");
         yield return new WaitForSeconds(_anim.GetCurrentAnimatorStateInfo(0).length);
-        Portal.transform.GetChild(0).gameObject.SetActive(true);
+        CachingManager.Instance().PortalObj.transform.GetChild(0).gameObject.SetActive(true);
         Debug.Log("특수소환!");
-        Invoke(nameof(Moving), 3f);
+        InvokeRepeating(nameof(Moving), 3, 2.5f);
     }
 
     private IEnumerator Heal()
