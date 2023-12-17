@@ -16,7 +16,7 @@ public enum PoolType
     DamageText,
     SnowFootPrint,
     FrightFlyMissile,
-    WindAttackEffect,
+    WindAttack,
     VolcanicSpike,
     Spider,
     FrightFly,
@@ -30,14 +30,15 @@ public enum PoolType
     Goblin,
     Boss,
     BossRock,
-    None
 }
 
-public class ObjectPoolManager : Singleton<ObjectPoolManager>
+
+public sealed class ObjectPoolManager : Singleton<ObjectPoolManager>
 {
     [SerializeField] private GameObject[] _objectPrefabs;
 
     private Dictionary<PoolType, Queue<GameObject>> _poolObjects = new Dictionary<PoolType, Queue<GameObject>>();
+    private Dictionary<string, Transform> _parents = new Dictionary<string, Transform>();
 
     private void Awake()
     {
@@ -49,18 +50,18 @@ public class ObjectPoolManager : Singleton<ObjectPoolManager>
         Init(PoolType.DamageText, 10);
         Init(PoolType.SnowFootPrint, 5);
         Init(PoolType.FrightFlyMissile, 5);
-        Init(PoolType.WindAttackEffect, 3);
+        Init(PoolType.WindAttack, 2);
         Init(PoolType.VolcanicSpike, 1);
-        Init(PoolType.Spider, 15);
-        Init(PoolType.FrightFly, 15);
-        Init(PoolType.ForestGolem1, 40);
-        Init(PoolType.ForestGolem2, 40);
-        Init(PoolType.ForestGolem3, 40);
+        Init(PoolType.Spider, 10);
+        Init(PoolType.FrightFly, 10);
+        Init(PoolType.ForestGolem1, 10);
+        Init(PoolType.ForestGolem2, 10);
+        Init(PoolType.ForestGolem3, 10);
         Init(PoolType.SpecialGolem, 1);
-        Init(PoolType.GoblinWarrior, 25);
-        Init(PoolType.GoblinArcher, 25);
-        Init(PoolType.GoblinArcherArrow, 20);
-        Init(PoolType.Goblin, 25);
+        Init(PoolType.GoblinWarrior, 10);
+        Init(PoolType.GoblinArcher, 10);
+        Init(PoolType.GoblinArcherArrow, 10);
+        Init(PoolType.Goblin, 10); 
         Init(PoolType.Boss, 1);
         Init(PoolType.BossRock, 1);
     }
@@ -70,9 +71,8 @@ public class ObjectPoolManager : Singleton<ObjectPoolManager>
     /// </summary>
     private void Init(PoolType poolType, int initCount)
     {
-        if(!_poolObjects.ContainsKey(poolType))
-            _poolObjects.Add(poolType, new Queue<GameObject>());
-        
+        _poolObjects.Add(poolType, new Queue<GameObject>());
+
         for (int i = 0; i < initCount; i++)
         {
             _poolObjects[poolType].Enqueue(CreateNewObject(poolType));
@@ -82,60 +82,57 @@ public class ObjectPoolManager : Singleton<ObjectPoolManager>
     /// <summary>
     /// 부모 오브젝트를 만들어 여러 PoolType의 오브젝트를 관리
     /// </summary>
-    private GameObject CreateParent(PoolType poolType)
+    private Transform CreateParentTr(PoolType poolType)
     {
-        if (!transform.Find(poolType.ToString()))
+        Transform parentTr;
+        string parentName = poolType.ToString();
+        _parents.TryGetValue(parentName, out parentTr);
+        if (parentTr != null)
         {
-            var newParent = new GameObject(poolType.ToString());
-            newParent.transform.SetParent(transform);
-            return newParent;
+            return parentTr;
         }
-        else //이미 부모오브젝트가 생성되어 있는 경우
-        {
-            var parent = transform.Find(poolType.ToString()).gameObject;
-            parent.transform.SetParent(transform);
-            return parent;
-        }
+        var newParent = new GameObject(parentName);
+        newParent.transform.SetParent(this.transform);
+        _parents.Add(parentName, newParent.transform);
+        return newParent.transform;
     }
-    
+
     private GameObject CreateNewObject(PoolType poolType)
     {
         var newObj = Instantiate(_objectPrefabs[(int) poolType]);
         newObj.SetActive(false);
-        newObj.transform.SetParent(CreateParent(poolType).transform);
+        newObj.transform.SetParent(CreateParentTr(poolType));
         return newObj;
     }
 
     /// <summary>
     /// 생성했던 오브젝트 사용
     /// </summary>
-    public GameObject GetObject(PoolType poolType)
+    public GameObject GetObject(PoolType poolType, bool isActive = true)
     {
         if (_poolObjects[poolType].Count > 0)
         {
             var obj = _poolObjects[poolType].Dequeue();
             obj.transform.SetParent(null);
-            obj.SetActive(true);
+            obj.SetActive(isActive);
             return obj;
         }
         else // 개수가 부족할 경우 새로 만들어서 사용
         {
             var newObj = CreateNewObject(poolType);
-            newObj.SetActive(true);
+            newObj.SetActive(isActive);
             newObj.transform.SetParent(null);
             return newObj;
         }
     }
-    
+
    /// <summary>
    /// 사용했던 오브젝트를 Queue에 다시 넣어둠
    /// </summary>
-   /// <param name="poolType">오브젝트를 관리하는 Queue</param>
-   /// <param name="obj">사용했던 오브젝트</param>
     public void ReturnObject(PoolType poolType, GameObject obj)
     {
         obj.gameObject.SetActive(false);
-        obj.transform.SetParent(CreateParent(poolType).transform);
+        obj.transform.SetParent(CreateParentTr(poolType));
         _poolObjects[poolType].Enqueue(obj);
     }
 }

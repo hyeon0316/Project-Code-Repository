@@ -6,7 +6,7 @@ using System.IO;
 using System.Text;
 using Cysharp.Threading.Tasks;
 
-public class JsonToDataManager : SingletonAwake<JsonToDataManager>
+public sealed class JsonToDataManager : SingletonAwake<JsonToDataManager>
 {
     private const string SETTING_PATH = "./setting.Json";
 

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class PlayerManager : Singleton<PlayerManager>
+public sealed class PlayerManager : Singleton<PlayerManager>
 {
     public Inventory Inventory => _inventory;
     public Player Player => _player;

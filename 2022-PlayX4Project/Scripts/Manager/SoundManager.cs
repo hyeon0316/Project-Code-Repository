@@ -23,7 +23,7 @@ public enum SoundType
     MaxCount, 
 }
 
-public class SoundManager : Singleton<SoundManager>
+public sealed class SoundManager : Singleton<SoundManager>
 {
     private AudioSource[] _audioSources = new AudioSource[(int) SoundType.MaxCount];
     private Dictionary<string, AudioClip> _audioClips = new Dictionary<string, AudioClip>();

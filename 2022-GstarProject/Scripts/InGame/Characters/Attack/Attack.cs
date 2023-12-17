@@ -2,24 +2,24 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public abstract class Attack : MonoBehaviour
+public class Attack : MonoBehaviour
 {
-    [SerializeField] private PoolType _curPoolType;
-    
+    protected Stat _stat;
+
     /// <summary>
     /// 최종 데미지를 계산
     /// </summary>
     /// <returns></returns>
-    public abstract int CalculateDamage(Stat stat);
-    
-
-    /// <summary>
-    /// 풀링 오브젝트 사용 뒤 반환
-    /// </summary>
-    protected virtual void DisableObject()
+    public virtual int CalculateDamage(Stat stat)
     {
-        ObjectPoolManager.Instance.ReturnObject(_curPoolType, this.gameObject);
+        int resultDamage = stat.Attack * stat.AllDamge / 100;
+        resultDamage = (int)(resultDamage * Random.Range(0.8f, 1.1f));
+        return resultDamage;
     }
 
-    
+
+    public virtual void SetStat(Stat stat)
+    {
+        _stat = stat;
+    }
 }

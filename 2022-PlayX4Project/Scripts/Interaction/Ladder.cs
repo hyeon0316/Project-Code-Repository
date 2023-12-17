@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Ladder : Interaction
+public sealed class Ladder : Interaction
 {
     private static bool _isLadder = false;//사다리를 탈 수 있을때
 

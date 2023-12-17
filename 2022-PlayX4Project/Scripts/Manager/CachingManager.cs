@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class CachingManager : MonoBehaviour
+public sealed class CachingManager : MonoBehaviour
 {
     private static CachingManager _instance;
 

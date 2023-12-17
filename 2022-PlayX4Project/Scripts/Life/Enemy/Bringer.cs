@@ -6,7 +6,7 @@ using UnityEngine.AI;
 using Random = UnityEngine.Random;
 
 
-public class Bringer : Enemy, IEnemyMove, IEnemyAttack
+public sealed class Bringer : Enemy, IEnemyMove, IEnemyAttack
 {
     [SerializeField] private EnemyAttack _enemyAttack;
     [SerializeField] private NavMeshAgent _EnemyNav;

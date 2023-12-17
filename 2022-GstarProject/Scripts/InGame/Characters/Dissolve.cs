@@ -1,14 +1,15 @@
 using System.Collections;
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using UnityEngine;
 
 public class Dissolve : MonoBehaviour
 {
-    private SkinnedMeshRenderer meshRenderer;
-    
     [Range(0.1f,1)]
     [SerializeField] private float _doSpeed;
+
+    private SkinnedMeshRenderer meshRenderer;
 
     private void Awake(){
         meshRenderer = this.GetComponent<SkinnedMeshRenderer>();
@@ -26,8 +27,8 @@ public class Dissolve : MonoBehaviour
     /// <summary>
     /// 물체를 서서히 지운다.
     /// </summary>
-    public void DissolveOut()
+    public async UniTask DissolveOutAsync()
     {
-        meshRenderer.material.DOFloat(1, "_Cutoff", _doSpeed);
+        await meshRenderer.material.DOFloat(1, "_Cutoff", _doSpeed);
     }
 }

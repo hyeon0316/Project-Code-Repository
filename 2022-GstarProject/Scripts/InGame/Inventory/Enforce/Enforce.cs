@@ -133,36 +133,36 @@ public class Enforce : MonoBehaviour
         _enforce++;
         if (CheckZero(_stat.Attack))
         {
-            _stat.Attack += _num * ATTACK* _enforce;
+            _stat.SetAttack(_num * ATTACK* _enforce);
         }
         if (CheckZero(_stat.HitPercent))
-            _stat.HitPercent += _num * HIT* _enforce;
+            _stat.SetHitPercent(_num * HIT * _enforce);
         if (CheckZero(_stat.SkillDamage))
-            _stat.SkillDamage += _num * SKILLD* _enforce;
+            _stat.SetSkillDamage(_num * SKILLD* _enforce);
         if (CheckZero(_stat.AllDamge))
-            _stat.AllDamge += _num * ALLD* _enforce;
+            _stat.SetAllDamage(_num * ALLD * _enforce);
 
         if (CheckZero(_stat.Defense))
-            _stat.Defense += _num * DEF* _enforce;
+            _stat.SetDefense(_num * DEF* _enforce);
         if (CheckZero(_stat.Dodge))
-            _stat.Dodge += _num * DODGE* _enforce;
+            _stat.SetDodge(_num * DODGE* _enforce);
         if (CheckZero(_stat.ReduceDamage))
-            _stat.ReduceDamage += _num * REDEF* _enforce;
+            _stat.SetReduceDamage( _num * REDEF* _enforce);
 
         if (CheckZero(_stat.MaxHp))
-            _stat.MaxHp += _num * HP* _enforce;
+            _stat.SetMaxHp(_num * HP* _enforce);
         if (CheckZero(_stat.MaxMp))
             _stat.MaxMp += _num * MP* _enforce;
 
         
         if (CheckZero(_stat.MaxPostion))
-            _stat.HitPercent += _num * POSTION;
+            _stat.SetHitPercent(_num * POSTION);
         
 
         if (CheckZero(_stat.RecoveryHp))
-            _stat.RecoveryHp += _num * REHP;
+            _stat.SetRecoveryHp(_num * REHP);
         if (CheckZero(_stat.RecoveryMp))
-            _stat.RecoveryMp += _num * REMP;
+            _stat.SetRecoveryMp(_num * REMP);
     }
     private bool CheckZero(int _a)
     {

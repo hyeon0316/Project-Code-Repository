@@ -2,17 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class FrightFlyMissile : NormalAttack
+public sealed class FrightFlyMissile : LongAttack
 {
     [SerializeField] private float _missileSpeed;
-
-    private Stat _stat;
-    
-    public void SetStat(Stat stat)
-    {
-        _stat = stat;
-        DelayDisable();
-    }
    
     private void FixedUpdate()
     {
@@ -29,7 +21,7 @@ public class FrightFlyMissile : NormalAttack
         if (other.gameObject.layer == LayerMask.NameToLayer("Player"))
         {
             other.transform.GetComponent<Creature>().TryGetDamage(_stat, this);
-            DisableObject();
+            CallDisableEvent();
         }
     }
     

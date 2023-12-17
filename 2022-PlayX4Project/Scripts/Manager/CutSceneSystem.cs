@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-public class CutSceneSystem : MonoBehaviour
+public sealed class CutSceneSystem : MonoBehaviour
 {  
     [SerializeField] private List<string> _eventSentences_SecondFloor;
     [SerializeField] private List<string> _eventSentences_BossRoom;

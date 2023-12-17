@@ -7,9 +7,10 @@ using UnityEngine.UI;
 
 public class Fade : MonoBehaviour
 {
-    private Image _image;
     [Header("페이드 인 또는 아웃 하는데 걸리는 시간")]
     [SerializeField] private float _doTime;
+
+    private Image _image;
 
     private void Awake()
     {

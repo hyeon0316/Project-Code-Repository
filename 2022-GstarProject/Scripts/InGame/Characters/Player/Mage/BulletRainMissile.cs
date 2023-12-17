@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-public class BulletRainMissile : SkillAttack
+public sealed class BulletRainMissile : SkillAttack
 {
     private Vector3[] _bezierPoints = new Vector3[4];
 
@@ -37,10 +37,10 @@ public class BulletRainMissile : SkillAttack
                            (distanceFromEnd * Random.Range(-1.0f, 1.0f) * _target.right) + // X (좌, 우 전체)
                            (distanceFromEnd * Random.Range(-1.0f, 1.0f) * _target.up) + // Y (위, 아래 전체)
                            (distanceFromEnd * Random.Range(0.8f, 1.0f) * _target.forward); // Z (앞 쪽만)
-        
+
         //_bezierPoints[3] = _target.position + new Vector3(Random.Range(-1.0f, 1.0f), Random.Range(-1.0f, 1.0f), Random.Range(-1.0f, 1.0f)); // 도착 지점
 
-        transform.position = _bezierPoints[0];
+        this.transform.position = _bezierPoints[0];
     }
 
     private void Update()
@@ -54,7 +54,7 @@ public class BulletRainMissile : SkillAttack
 
         _curTime += Time.deltaTime * _speed;
 
-        transform.position = new Vector3(
+        this.transform.position = new Vector3(
             CubicBezierCurve(_bezierPoints[0].x, _bezierPoints[1].x, _bezierPoints[2].x),
             CubicBezierCurve(_bezierPoints[0].y, _bezierPoints[1].y, _bezierPoints[2].y),
             CubicBezierCurve(_bezierPoints[0].z, _bezierPoints[1].z, _bezierPoints[2].z));
@@ -64,15 +64,15 @@ public class BulletRainMissile : SkillAttack
     {
         while (true)
         {
-            if ((transform.position - _target.position).sqrMagnitude < 1)
+            if ((this.transform.position - _target.position).sqrMagnitude < 1)
             {
                 _target.transform.GetComponent<Creature>().TryGetDamage(DataManager.Instance.Player.Stat, this);
                 CreateMissileEffect();
-                DisableObject();
+                ObjectPoolManager.Instance.ReturnObject(PoolType.BulletRainMissile, this.gameObject);
                 break;
             }
 
-            transform.position = Vector3.Lerp(transform.position, _target.transform.position, Time.deltaTime);
+            this.transform.position = Vector3.Lerp(transform.position, _target.transform.position, Time.deltaTime);
             yield return null;
         }
     }
@@ -100,7 +100,7 @@ public class BulletRainMissile : SkillAttack
     private void CreateMissileEffect()
     {
         GameObject effect = ObjectPoolManager.Instance.GetObject(PoolType.BulletRainEffect);
-        effect.transform.position = transform.position;
+        effect.transform.position = this.transform.position;
         effect.GetComponent<BulletRainEffect>().DelayDisable();
     }
    

@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.AI;
 using Random = UnityEngine.Random;
 
-public class Demon : Enemy, IEnemyMove, IEnemyAttack
+public sealed class Demon : Enemy, IEnemyMove, IEnemyAttack
 {
     private Enemystate _state;
     private EnemyAttack _enemyAttack;

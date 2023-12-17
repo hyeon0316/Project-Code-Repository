@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Xml.Serialization;
 using UnityEngine;
 
 
@@ -395,41 +396,15 @@ public class Inventory : MonoBehaviour
     }
     public void EquPlayerStat(ItemStat _stat)
     {
-
-        DataManager.Instance.Player.Stat.Attack += _stat.Attack;
-        DataManager.Instance.Player.Stat.HitPercent += _stat.HitPercent;
-        DataManager.Instance.Player.Stat.SkillDamage += _stat.SkillDamage;
-        DataManager.Instance.Player.Stat.AllDamge += _stat.AllDamge;
-
-        DataManager.Instance.Player.Stat.Defense += _stat.Defense;
-        DataManager.Instance.Player.Stat.Dodge += _stat.Dodge;
-        DataManager.Instance.Player.Stat.ReduceDamage += _stat.ReduceDamage;
-
-        DataManager.Instance.Player.Stat.MaxHp += _stat.MaxHp;
-        DataManager.Instance.Player.Stat.MaxMp += _stat.MaxMp;
-        DataManager.Instance.Player.Stat.MaxPostion += _stat.MaxPostion;
-        DataManager.Instance.Player.Stat.RecoveryHp += _stat.RecoveryHp;
-        DataManager.Instance.Player.Stat.RecoveryMp += _stat.RecoveryMp;
+        PlayerStat stat = DataManager.Instance.Player.Stat as PlayerStat;
+        stat.Equip(_stat);
         DataManager.Instance.Player.UpdateHpBar();
-
     }
+
     public void UnEquPlayerStat(ItemStat _stat)
     {
-
-        DataManager.Instance.Player.Stat.Attack -= _stat.Attack;
-        DataManager.Instance.Player.Stat.HitPercent -= _stat.HitPercent;
-        DataManager.Instance.Player.Stat.SkillDamage -= _stat.SkillDamage;
-        DataManager.Instance.Player.Stat.AllDamge -= _stat.AllDamge;
-
-        DataManager.Instance.Player.Stat.Defense -= _stat.Defense;
-        DataManager.Instance.Player.Stat.Dodge -= _stat.Dodge;
-        DataManager.Instance.Player.Stat.ReduceDamage -= _stat.ReduceDamage;
-
-        DataManager.Instance.Player.Stat.MaxHp -= _stat.MaxHp;
-        DataManager.Instance.Player.Stat.MaxMp -= _stat.MaxMp;
-        DataManager.Instance.Player.Stat.MaxPostion += _stat.MaxPostion;
-        DataManager.Instance.Player.Stat.RecoveryHp += _stat.RecoveryHp;
-        DataManager.Instance.Player.Stat.RecoveryMp += _stat.RecoveryMp;
+        PlayerStat stat = DataManager.Instance.Player.Stat as PlayerStat;
+        stat.UnEquip(_stat);
         DataManager.Instance.Player.UpdateHpBar();
 
     }

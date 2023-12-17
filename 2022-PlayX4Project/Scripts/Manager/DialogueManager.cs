@@ -7,7 +7,7 @@ using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using Cysharp.Threading.Tasks;
 
-public class DialogueManager : SingletonAwake<DialogueManager>
+public sealed class DialogueManager : SingletonAwake<DialogueManager>
 {
     private const string DELETE_SENTENCE = "Delete";
     private const string REPEAT_SENTENCE = "Repeat";

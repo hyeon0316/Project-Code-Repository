@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Twisted : Enemy, IEnemyMove, IEnemyAttack
+public sealed class Twisted : Enemy, IEnemyMove, IEnemyAttack
 {
     private Enemystate Enemystate;
 

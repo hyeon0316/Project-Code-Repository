@@ -4,7 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-public class FadeManager : Singleton<FadeManager>
+public sealed class FadeManager : Singleton<FadeManager>
 {
     [Range(0,1)]
     [SerializeField] private float _fadeDelayRate;

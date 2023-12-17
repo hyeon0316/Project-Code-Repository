@@ -3,38 +3,25 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Rock : NormalAttack
+public sealed class Rock : LongAttack
 {
-    private Rigidbody _rigidbody;
-    
-    private Stat _stat;
-    
-    private void Awake()
+    [SerializeField] private Rigidbody _rigidbody;
+
+    private void Start()
     {
-        _rigidbody = GetComponent<Rigidbody>();
+        _rigidbody.isKinematic = false;
+        Invoke(nameof(CallDisableEvent), 1f);
     }
 
-    public void SetStat(Stat stat)
-    {
-        _stat = stat;
-        _rigidbody.isKinematic = false;
-        DelayDisable();
-    }
-    
     private void FixedUpdate()
     {
         Vector3 speed = new Vector3(100, 200, 100);
         _rigidbody.AddForce(speed);
     }
     
-    private void DelayDisable()
+    protected override void CallDisableEvent()
     {
-        Invoke("DisableObject", 1f);
-    }
-
-    protected override void DisableObject()
-    {
-        base.DisableObject();
+        base.CallDisableEvent();
         _rigidbody.isKinematic = true;
     }
 

@@ -10,8 +10,6 @@ public class UsePortion : MonoBehaviour
     
     [Header("포션 쿨타임")] [SerializeField] protected CoolDown _potionCoolDown;
 
-    public CoolDown PotionCoolDown => _potionCoolDown;
-   
 
     public void SetPortion(int i)
     {

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Dummy : Enemy
+public sealed class Dummy : Enemy
 {
     protected override IEnumerator DeadEventCo()
     {

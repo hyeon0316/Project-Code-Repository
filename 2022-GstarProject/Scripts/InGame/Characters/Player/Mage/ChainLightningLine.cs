@@ -5,7 +5,7 @@ using UnityEngine;
 using System.Linq;
 using Random = UnityEngine.Random;
 
-public class ChainLightningLine : SkillAttack
+public sealed class ChainLightningLine : SkillAttack
 {
     private AudioSource _audioSource;
     
@@ -116,10 +116,10 @@ public class ChainLightningLine : SkillAttack
         }
     }
 
-    public void CreateLine()
+    public void CreateLine(Transform target)
     {
         _lineRenderer.enabled = true;
-        _chainTargets.Add(DataManager.Instance.Player.Targets[0]);
+        _chainTargets.Add(target);
         CheckRange(3);
         SetFromMaterialChange();
 

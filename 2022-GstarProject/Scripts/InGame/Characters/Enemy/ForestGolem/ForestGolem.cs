@@ -1,44 +1,49 @@
+using Cysharp.Threading.Tasks;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class ForestGolem : Enemy
+public sealed class ForestGolem : Enemy
 {
-    [SerializeField] private ShortAttack _shortAttackArea;
-    [SerializeField] private BoxCollider _attackCollider;
+    [SerializeField] private Attack _attack;
+    [SerializeField] private float _attackDelay;
 
-    /// <summary>
-    /// 공격콤보 카운트
-    /// </summary>
-    private int _attackCount;
+    private int _attackOrder;
 
-    protected override void OnEnable()
+    protected override void Init()
     {
-        base.OnEnable();
-        _attackCollider.enabled = false;
-        _attackCount = -1;
+        base.Init();
+        _attack.SetStat(Stat);
+        _attackOrder = 1;
     }
-    
-    protected override void Start()
+
+    protected override async UniTask AttackAsync()
     {
-        base.Start();
-        _shortAttackArea.SetStat(Stat);
+        PlayAnim();
+        await UniTask.NextFrame(); //제대로 Attack 애니의 length를 불러오기 위한 딜레이
+        var animDelay = TimeSpan.FromSeconds(_anim.GetCurrentAnimatorStateInfo(0).length * 0.6f);
+        await UniTask.Delay(animDelay);
+        DataManager.Instance.Player.TryGetDamage(Stat, _attack);
+        _anim.CrossFade(Global.Idle, 0.3f);
+        await UniTask.Delay(TimeSpan.FromSeconds(_attackDelay));
     }
-    
-    protected override void Attack()
+
+    private void PlayAnim()
     {
-        _isAttack = true;
-        _animator.SetInteger(Global.EnemyAttackInteger, ++_attackCount % Global.GolemMaxComboAttack);
+        switch (_attackOrder)
+        {
+            case 1:
+                _anim.Play(Global.Attack1);
+                break;
+            case 2:
+                _anim.Play(Global.Attack2);
+                break;
+            case 3:
+                _anim.Play(Global.Attack3);
+                break;
+        }
+        _attackOrder = (_attackOrder % 3) + 1;
     }
-    
-    public void ActiveAttackCollider()
-    {
-        _attackCollider.enabled = true;
-    }
-    
-    public void InActiveAttackCollider()
-    {
-        _attackCollider.enabled = false;
-        _isAttack = false;
-    }
+
 }

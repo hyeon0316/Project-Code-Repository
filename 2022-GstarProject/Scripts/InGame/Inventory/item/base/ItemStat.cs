@@ -4,9 +4,8 @@ using UnityEngine;
 
 public class ItemStat : Stat
 {
-    
-    public int MaxPostion { get; set; }
-    public int RecoveryMp { get; set; }
+    public int MaxPostion;
+    public int MaxMp;
 
     public ItemStat DeepCopy()
     {
@@ -26,5 +25,71 @@ public class ItemStat : Stat
         newCopy.RecoveryHp = this.RecoveryHp;
         newCopy.RecoveryMp = this.RecoveryMp;
         return newCopy;
+    }
+
+    public void Set(int damage, int hit, int skillDmg, int allDmg, int defense, int evasion, int allDefense, int hp, int mp, int postion, int hpRe, int mpRe)
+    {
+        Attack = damage;
+        HitPercent = hit;
+        SkillDamage = skillDmg;
+        AllDamge = allDmg;
+        Defense = defense;
+        Dodge = evasion;
+        ReduceDamage = allDefense;
+        MaxHp = hp;
+        MaxMp = mp;
+        MaxPostion = postion;
+        RecoveryHp = hpRe;
+        RecoveryMp = mpRe;
+    }
+
+    public void SetAttack(int value)
+    {
+        Attack += value;
+    }
+
+    public void SetHitPercent(int value)
+    {
+        HitPercent += value;
+    }
+
+    public void SetSkillDamage(int value)
+    {
+        SkillDamage += value;
+    }
+
+    public void SetAllDamage(int value)
+    {
+        AllDamge += value;
+    }
+
+    public void SetDodge(int value)
+    {
+        Dodge += value;
+    }
+
+    public void SetDefense(int value)
+    {
+        Defense += value;
+    }
+
+    public void SetReduceDamage(int value)
+    {
+        ReduceDamage+= value;
+    }
+
+    public void SetMaxHp(int value)
+    {
+        MaxHp += value;
+    }
+
+    public void SetRecoveryHp(int value)
+    {
+        RecoveryHp += value;
+    }
+
+    public void SetRecoveryMp(int value)
+    {
+        RecoveryMp += value;
     }
 }

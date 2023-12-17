@@ -7,7 +7,7 @@ using UnityEngine.AI;
 using UnityEngine.SocialPlatforms;
 using Random = UnityEngine.Random;
 
-public class Necromancer : Enemy, IEnemyMove
+public sealed class Necromancer : Enemy, IEnemyMove
 { 
     [SerializeField] private string[] _eventSentences;
 

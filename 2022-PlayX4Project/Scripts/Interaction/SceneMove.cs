@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class SceneMove : Interaction
+public sealed class SceneMove : Interaction
 {
     [SerializeField] private string _sceneName = "Dungeon";
 

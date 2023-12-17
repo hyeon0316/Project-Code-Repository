@@ -1,106 +1,112 @@
+using Cysharp.Threading.Tasks;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UniRx;
 
-public class Boss : Enemy
+public sealed class Boss : Enemy
 {
-    [SerializeField] private ShortAttack _shortAttackArea;
-    [SerializeField] private BoxCollider _attackCollider;
-    
-    [SerializeField] private LongAttack _rockPos;
+    [SerializeField] private FixedHpBar _fixedHpBar;
+    [SerializeField] private Attack _attack;
+    [SerializeField] private LongAttackCreator _rockPos;
+    [SerializeField] private AudioSource _audioSource;
+    [SerializeField] private float _attackDelay;
 
-    [SerializeField] private HpbarController _bossHpBar;
+    private int _attackOrder;
+    private int _patternOrder;
+    private bool _isNextPattern;
 
-    private AudioSource _audioSource;
-    
-    /// <summary>
-    /// 2번째 페이즈 진입시 공격 변경
-    /// </summary>
-    private int _nextPatternState;
-
-
-    protected override void Awake()
-    {
-        base.Awake();
-        _audioSource = GetComponent<AudioSource>();
-    }
-
-    protected override void OnEnable()
-    {
-        base.OnEnable();
-        _attackCollider.enabled = false;
-        _nextPatternState = 0;
-    }
-    
     protected override void Start()
     {
         base.Start();
-        _shortAttackArea.SetStat(Stat);
-        _bossHpBar.SetHpBar(Stat.MaxHp);
+        Stat.CurHp.Subscribe(curHp => _fixedHpBar.SetHpBar(Stat.MaxHp, curHp));
     }
 
-    protected override void Attack()
+    protected override void Init()
     {
-        SoundManager.Instance.EffectPlay(_audioSource, EffectSoundType.BossAttack);
-        _isAttack = true;
-        int attackState = 2 + _nextPatternState;
-        int randomPattern = Random.Range(0, 1 + _nextPatternState);
+        _isNextPattern = false;
+        _attackOrder = 1;
+        _patternOrder = 0;
+        _attack.SetStat(Stat);
+        base.Init();
+    }
 
-        if (randomPattern == 0)
+    protected override async UniTask AttackAsync()
+    {
+        if (Stat.CurHp.Value < Stat.MaxHp * 0.5f && !_isNextPattern)
         {
-            _animator.SetInteger(Global.EnemyStateInteger, attackState);
-            SoundManager.Instance.EffectPlay(_audioSource, EffectSoundType.BossAttack);
+            _patternOrder++;
+            SoundManager.Instance.EffectPlay(_audioSource, EffectSoundType.BossRoar);
+            _anim.Play(Global.Scream);
+            await UniTask.NextFrame();
+            var animDelay = TimeSpan.FromSeconds(_anim.GetCurrentAnimatorStateInfo(0).length);
+            await UniTask.Delay(animDelay);
+            _isNextPattern = true;
         }
         else
         {
-            _animator.SetInteger(Global.EnemyStateInteger, 4);
-            SoundManager.Instance.EffectPlay(_audioSource, EffectSoundType.BossThrowing);
+            await SelectPatternAsync();
         }
     }
 
-    public override void TryGetDamage(Stat stat, Attack attack)
+    private async UniTask SelectPatternAsync()
     {
-        _bossHpBar.ShowHpBar();
-        base.TryGetDamage(stat, attack);
+        int randPattern = UnityEngine.Random.Range(0, _patternOrder + 1);
 
-        if (Stat.Hp <= Stat.MaxHp / 2 && _nextPatternState == 0)
-            EntryNextPattern();
-        
-        _bossHpBar.UpdateHpBar(Stat.Hp);
+        switch(randPattern)
+        {
+            case 0:
+                await NormalAttack();
+                break;
+            case 1:
+                await LongAttack();
+                break;
+        }
+    }
+
+    private async UniTask NormalAttack()
+    {
+        PlayNormalAttackAnim();
+        SoundManager.Instance.EffectPlay(_audioSource, EffectSoundType.BossAttack);
+        await UniTask.NextFrame();
+        var animDelay = TimeSpan.FromSeconds(_anim.GetCurrentAnimatorStateInfo(0).length * 0.6f);
+        await UniTask.Delay(animDelay);
+        DataManager.Instance.Player.TryGetDamage(Stat, _attack);
+        _anim.CrossFade(Global.Idle, 0.3f);
+        await UniTask.Delay(TimeSpan.FromSeconds(_attackDelay));
+    }
+
+    private async UniTask LongAttack()
+    {
+        _anim.Play(Global.LongAttack);
+        SoundManager.Instance.EffectPlay(_audioSource, EffectSoundType.BossThrowing);
+        await UniTask.NextFrame();
+        var animDelay = TimeSpan.FromSeconds(_anim.GetCurrentAnimatorStateInfo(0).length * 0.3f);
+        await UniTask.Delay(animDelay);
+        _rockPos.CreateLongAttack(PoolType.BossRock, Stat);
+        _anim.CrossFade(Global.Idle, 0.3f);
+        await UniTask.Delay(TimeSpan.FromSeconds(_attackDelay));
+    }
+
+
+    private void PlayNormalAttackAnim()
+    {
+        switch (_attackOrder)
+        {
+            case 1:
+                _anim.Play(Global.Attack1);
+                break;
+            case 2:
+                _anim.Play(Global.Attack2);
+                break;
+        }
+        _attackOrder = (_attackOrder % 2) + 1;
     }
 
     protected override void Die()
     {
         base.Die();
-        _bossHpBar.CloseHpBar();
         SoundManager.Instance.EffectPlay(_audioSource, EffectSoundType.BossDie);
-    }
-    public void CreateRock()
-    {
-        _rockPos.CreateProjectile(PoolType.BossRock, Stat);
-    }
-    
-    private void EntryNextPattern()
-    {
-        SoundManager.Instance.EffectPlay(_audioSource, EffectSoundType.BossRoar);
-        _nextPatternState++;
-        _animator.SetTrigger(Global.EnemyNextPattern);
-        _attackCollider.enabled = false;
-    }
-
-    public void ActiveAttackCollider()
-    {
-        _attackCollider.enabled = true;
-    }
-    
-    public void InActiveAttackCollider()
-    {
-        _attackCollider.enabled = false;
-    }
-    
-    public void InActiveAttack()
-    {
-        _animator.SetInteger(Global.EnemyStateInteger, 0);
-        _isAttack = false;
     }
 }

@@ -40,7 +40,7 @@ public class TargetPanel : MonoBehaviour
     private IEnumerator UpdateTargetCo()
     {
         WaitForEndOfFrame delay = new WaitForEndOfFrame();
-        float distance = Mathf.Pow(DataManager.Instance.Player.SearchRadius, 2);
+        float distance = Mathf.Pow(DataManager.Instance.Player.GetSearchRadius(), 2);
         Enemy target = _target.GetComponent<Enemy>();
         while (true)
         {

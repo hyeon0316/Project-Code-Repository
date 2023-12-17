@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 [CreateAssetMenu(fileName = "PlayerStat", menuName = "New Stat/PlayerStat",order = 0)]
-public class PlayerStatData : ScriptableObject
+public class PlayerStatObj : ScriptableObject
 {
     [Header("최대 체력")]
     public int MaxHp;

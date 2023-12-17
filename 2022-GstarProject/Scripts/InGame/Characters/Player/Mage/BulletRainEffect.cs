@@ -15,7 +15,7 @@ public class BulletRainEffect : MonoBehaviour
    public void DelayDisable()
    {
       SoundManager.Instance.EffectPlay(_audioSource, EffectSoundType.BulletRainHit);
-      Invoke("DisableEffect", 1.5f);
+      Invoke(nameof(DisableEffect), 1.5f);
    }
    
    private void DisableEffect()

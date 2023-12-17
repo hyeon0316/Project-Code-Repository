@@ -1,145 +1,117 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 using UnityEngine;
-using Random = UnityEngine.Random;
 
 
 [System.Serializable]
-public class SpawnEnemyDic : SerializableDictionary<PoolType, int>{}
+public struct SpawnEnemy
+{
+    public PoolType Type;
+    public int Count;
+}
 
 public class EnemySpawnArea : MonoBehaviour
 {
+    [SerializeField]private string[] _enemyNames; 
+    [SerializeField] private string _mapName;
     [Header("스폰 될 적 종류와 수")]
-    [SerializeField] private SpawnEnemyDic _spawnEnemyDics;
-    [SerializeField] private EnemyStatData[] enemyStat;
-    public string MapName;
-    public string[] EnemyName;
-    private BoxCollider _boxCollider;
-    public int Difficulty{ get; set; }
-
+    [SerializeField] private SpawnEnemy[] _spawnEnemys;
+    [SerializeField] private EnemyStatObj[] enemyStat;
     [Header("해당 스폰지점이 던전인지 아닌지")]
     [SerializeField] private bool _isDungeon;
+    [SerializeField] private BoxCollider _boxCollider;
 
-    /// <summary>
-    /// 해당 스폰 지역에 있는 적들
-    /// </summary>
-    private List<GameObject> _enemyList = new List<GameObject>();
-
-    private void Awake()
-    {
-        _boxCollider = GetComponent<BoxCollider>();
-    }
+    private List<Enemy> _enemyList = new List<Enemy>();
+    private int _difficulty; 
 
     private void OnEnable()
     {
-        if(!_isDungeon) 
-            SpawnDicsEnemy();
-        else
-            SpawnDungeonEnemy();
+        SpawnEnemy();
     }
 
     private void OnDisable()
     {
-        if(Time.timeScale != 0)
-            Init();
+        Clear();
     }
 
-    /// <summary>
-    /// 딕셔너리에 저장된 적들을 생성
-    /// </summary>
-    private void SpawnDicsEnemy()
+    private void SpawnEnemy()
     {
-        foreach (var dic in _spawnEnemyDics)
+        for (int i = 0; i < _spawnEnemys.Length; i++)
         {
-            for (int i = 0; i < _spawnEnemyDics[dic.Key]; i++)
+            for (int j = 0; j < _spawnEnemys[i].Count; j++)
             {
-                GameObject enemy = ObjectPoolManager.Instance.GetObject(dic.Key);
-                _enemyList.Add(enemy);
-                enemy.GetComponent<Enemy>().SpawnArea = _boxCollider;
-                enemy.transform.position = RandomSpawnPos();
+                Enemy enemy = ObjectPoolManager.Instance.GetObject(_spawnEnemys[i].Type, false).GetComponent<Enemy>();
+                AddEnemy(enemy);
+                if (_isDungeon)
+                {
+                    enemy.ChangeStat(enemyStat[_difficulty]);
+                    enemy.GetComponent<IGold>().RewardGold *= _difficulty + 1;
+                }
+                enemy.gameObject.SetActive(true);
             }
         }
     }
-    
-    /// <summary>
-    /// 던전용 몹 생성
-    /// </summary>
-    public void SpawnDungeonEnemy()
-    {
-        foreach (var dic in _spawnEnemyDics)
-        {
-            for (int i = 0; i < _spawnEnemyDics[dic.Key]; i++)
-            {
-                GameObject enemyPrefab = ObjectPoolManager.Instance.GetObject(dic.Key);
-                _enemyList.Add(enemyPrefab);
-                Enemy enemy = enemyPrefab.GetComponent<Enemy>();
-                enemy.SpawnArea = _boxCollider;
-                
-                enemy.SetStat(enemyStat[Difficulty]);
-                Debug.Log(enemy.gameObject.name + "/" + enemy.Stat.Attack);
-                enemy.transform.position = RandomSpawnPos();
-                enemy.gold = enemy.gold * (Difficulty + 1);
-
-            }
-        }
-    }
-
-    /// <summary>
-    /// 모든 적을 반환(던전)
-    /// </summary>
-    public void Init()
-    {
-        foreach (var enemy in _enemyList)
-        {
-            Enemy returnEnemy = enemy.GetComponent<Enemy>();
-            ObjectPoolManager.Instance.ReturnObject(returnEnemy.CurEnemyType, enemy.gameObject);
-        }
-        _enemyList.Clear();
-    }
-
 
     /// <summary>
     /// 자신을 반환하고 딕셔너리에 있는 적 종류 중 랜덤한 적을 스폰
     /// </summary>
-    public void SpawnRandomEnemy(GameObject returnEnemy)
+    public void ReturnEnemy(Enemy returnEnemy)
     {
         _enemyList.Remove(returnEnemy);
-        
-        int index = Random.Range(0, _spawnEnemyDics.Count);
-        KeyValuePair<PoolType, int> randomDic = _spawnEnemyDics.ElementAt(index);
-        
-        GameObject enemyPrefab = ObjectPoolManager.Instance.GetObject(randomDic.Key);
-        _enemyList.Add(enemyPrefab);
-        Enemy enemy = enemyPrefab.GetComponent<Enemy>();
-        enemy.GetComponent<Enemy>().SpawnArea = _boxCollider;
+
+        int index = UnityEngine.Random.Range(0, _spawnEnemys.Length);
+        Enemy enemy = ObjectPoolManager.Instance.GetObject(_spawnEnemys[index].Type).GetComponent<Enemy>();
+        AddEnemy(enemy);
         if (_isDungeon)
         {
-            enemy.GetComponent<Enemy>().SetStat(enemyStat[Difficulty]);
+            enemy.ChangeStat(enemyStat[_difficulty]);
         }
-        enemy.ShowAppearance();
-        enemy.transform.position = RandomSpawnPos();
+        enemy.Show();
     }
 
+    public void Clear()
+    {
+        for (int i = 0; i < _enemyList.Count; i++)
+        {
+            ObjectPoolManager.Instance.ReturnObject(_enemyList[i].GetEnemyType(), _enemyList[i].gameObject);
+        }
+        _enemyList.Clear();
+    }
 
-    /// <summary>
-    /// 적들이 스폰지점 안의 범위에서 랜덤위치 생성
-    /// </summary>
-    /// <returns></returns>
-    private Vector3 RandomSpawnPos()
+    public Vector3 GetRandomSpawnPos()
     {
         Vector3 originPos = transform.position;
-        
+
         float width = _boxCollider.bounds.size.x;
         float height = _boxCollider.bounds.size.z;
 
-        float randomX = Random.Range((width / 2) * -1, width / 2);
-        float randomZ = Random.Range((height / 2) * -1, height / 2);
+        float randomX = UnityEngine.Random.Range((width / 2) * -1, width / 2);
+        float randomZ = UnityEngine.Random.Range((height / 2) * -1, height / 2);
         Vector3 randomPos = new Vector3(randomX, 0, randomZ);
-
         Vector3 spawnPos = originPos + randomPos;
         return spawnPos;
     }
-   
+
+    private void AddEnemy(Enemy enemy)
+    {
+        _enemyList.Add(enemy);
+        enemy.SetArea(this);
+        enemy.transform.position = GetRandomSpawnPos();
+    }
+
+    public string GetMapName()
+    {
+        return _mapName;
+    }
+
+    public void SetDifficulty(int difficulty)
+    {
+        _difficulty = difficulty;
+    }
+
+    public IEnumerable GetEnemyNames()
+    {
+        return _enemyNames;
+    }
 }

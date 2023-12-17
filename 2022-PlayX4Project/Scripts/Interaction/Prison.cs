@@ -4,7 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public  class Prison : Interaction
+public sealed class Prison : Interaction
 {
     [SerializeField] private GameObject _closeDoorObj;
     [SerializeField] private GameObject _openDoorObj;

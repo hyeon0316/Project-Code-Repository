@@ -45,7 +45,7 @@ public class DungeonUI : MonoBehaviour
     }
     public void SpawnC()
     {
-        spawnArea.Difficulty = dunIndex;
+        spawnArea.SetDifficulty(dunIndex);
         SoundManager.Instance.BgmPlay(1);
         DataManager.Instance.Player.UseTeleport(_tr);
         MapObj.SetActive(false);

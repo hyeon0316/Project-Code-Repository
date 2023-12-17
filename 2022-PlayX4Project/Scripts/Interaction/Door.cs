@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Door : Interaction
+public sealed class Door : Interaction
 {
     public override void StartInteract()
     {

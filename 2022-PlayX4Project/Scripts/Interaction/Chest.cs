@@ -9,7 +9,7 @@ public struct DropItemInfo
     public int DropItemCount;
 }
 
-public class Chest : Interaction
+public sealed class Chest : Interaction
 {
     [SerializeField] DropItemInfo[] _dropItems;
     [SerializeField] private GameObject _dropItemObj;

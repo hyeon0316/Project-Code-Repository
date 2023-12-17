@@ -23,7 +23,8 @@ public class BuyUI : MonoBehaviour
         Item = _slot.Item;
         if (Item is PortionItemData uItem)
         {
-            canPortion = DataManager.Instance.Player.Stat.MaxPostion - _slot.HavePortion;
+            PlayerStat stat = DataManager.Instance.Player.Stat as PlayerStat;
+            canPortion = stat.MaxPostion - _slot.HavePortion;
             if (canPortion <= 0)
                 canPortion = 0;
         }

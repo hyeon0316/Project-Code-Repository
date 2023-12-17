@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Cultist : Enemy, IEnemyMove, IEnemyAttack
+public sealed class Cultist : Enemy, IEnemyMove, IEnemyAttack
 {
     private Enemystate Enemystate;
 

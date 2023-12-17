@@ -30,7 +30,7 @@ public class MapContentUI : MonoBehaviour
         for (int i = 0; i < enemyarea.Length; i++)
         {
             _obj[i].SetActive(true);
-            _text[i].text = enemyarea[i].MapName;
+            _text[i].text = enemyarea[i].GetMapName();
         }
     }
     private void Init()
@@ -41,9 +41,11 @@ public class MapContentUI : MonoBehaviour
     private void SetContentText()
     {
         string str = "";
-        for(int i=0;i<_selectArea.EnemyName.Length;i++)
+        int i = 0;
+        foreach (var name in _selectArea.GetEnemyNames())
         {
-            str += i+1 +"."+_selectArea.EnemyName[i] + "\n";
+            str += i + 1 + "." + name + "\n";
+            i++;
         }
         ContentText.text = str;
     }

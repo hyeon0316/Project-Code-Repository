@@ -17,7 +17,7 @@ public class CoolDown : MonoBehaviour
 
     [SerializeField] private TextMeshProUGUI _coolDownText;
 
-    public bool IsCoolDown { get; set; }
+    public bool IsCoolDown { get; private set; }
 
     private void Update()
     {

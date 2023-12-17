@@ -1,37 +1,29 @@
+using Cysharp.Threading.Tasks;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class GoblinWarrior : Enemy
+public sealed class GoblinWarrior : Enemy
 {
-    [SerializeField] private ShortAttack _shortAttackArea;
-    [SerializeField] private BoxCollider _attackCollider;
-    protected override void OnEnable()
+    [SerializeField] private Attack _attack;
+    [SerializeField] private float _attackDelay;
+
+    protected override void Init()
     {
-        base.OnEnable();
-        _attackCollider.enabled = false;
+        base.Init();
+        _attack.SetStat(Stat);
     }
 
-    protected override void Start()
+    protected override async UniTask AttackAsync()
     {
-        base.Start();
-        _shortAttackArea.SetStat(Stat);
+        _anim.Play(Global.Attack);
+        await UniTask.NextFrame(); //제대로 Attack 애니의 length를 불러오기 위한 딜레이
+        var animDelay = TimeSpan.FromSeconds(_anim.GetCurrentAnimatorStateInfo(0).length * 0.6f);
+        await UniTask.Delay(animDelay);
+        DataManager.Instance.Player.TryGetDamage(Stat, _attack);
+        _anim.CrossFade(Global.Idle, 0.3f);
+        await UniTask.Delay(TimeSpan.FromSeconds(_attackDelay));
     }
 
-    protected override void Attack()
-    {
-        _isAttack = true;
-        _animator.SetInteger(Global.EnemyStateInteger, 2);
-    }
-
-    public void ActiveAttackCollider()
-    {
-        _attackCollider.enabled = true;
-    }
-    
-    public void InActiveAttackCollider()
-    {
-        _attackCollider.enabled = false;
-        _isAttack = false;
-    }
 }

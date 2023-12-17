@@ -4,9 +4,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-public class NormalAttackMissile : NormalAttack
+public sealed class NormalAttackMissile : LongAttack
 {
-   
    [SerializeField] private float _missileSpeed;
    private Transform _target;
  
@@ -20,9 +19,9 @@ public class NormalAttackMissile : NormalAttack
    {
       if ((transform.position - _target.position).sqrMagnitude <= 1)
       {
-         _target.transform.GetComponent<Creature>().TryGetDamage(DataManager.Instance.Player.Stat, this);
+         _target.transform.GetComponent<Creature>().TryGetDamage(_stat, this);
          CreateEffect();
-         DisableObject();
+         CallDisableEvent();
          return;
       }
 
@@ -34,7 +33,7 @@ public class NormalAttackMissile : NormalAttack
    public void Init(Transform target)
    {
       _target = target;
-      Invoke("DisableObject", 1f);
+      //Invoke("DisableObject", 1f);
    }
 
    private void CreateEffect()

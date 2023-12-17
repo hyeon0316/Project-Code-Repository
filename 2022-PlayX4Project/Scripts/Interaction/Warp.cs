@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
-public class Warp : Interaction
+public sealed class Warp : Interaction
 {
     [SerializeField] private Transform _nextPos;
     [SerializeField] private MapType _targetMap;

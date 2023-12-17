@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
-public class Npc : Interaction
+public sealed class Npc : Interaction
 {
     [SerializeField] private List<string> _sentences;
     [SerializeField] private SpriteRenderer _renderer;

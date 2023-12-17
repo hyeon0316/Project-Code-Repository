@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
-public class BigCultist : Enemy, IEnemyMove, IEnemyAttack
+public sealed class BigCultist : Enemy, IEnemyMove, IEnemyAttack
 {
     private Enemystate Enemystate;
 

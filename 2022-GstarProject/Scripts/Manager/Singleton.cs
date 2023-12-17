@@ -5,8 +5,6 @@ using UnityEngine;
 
 public class Singleton<T> : MonoBehaviour where T : MonoBehaviour
 {
-    // Destroy 여부 확인용
-    private static bool _shuttingDown = false;
     private static object _lock = new object();
     
     private static T _instance;
@@ -16,15 +14,12 @@ public class Singleton<T> : MonoBehaviour where T : MonoBehaviour
         {
             lock (_lock) //Thread Safe
             {
-                if (_instance == null && Time.timeScale != 0)
+                if (_instance == null && Time.timeScale != 0) // 에디터 플레이 종료시 호출 방지
                 {
-                    // 인스턴스 존재 여부 확인
                     _instance = (T) FindObjectOfType(typeof(T));
 
-                    // 아직 생성되지 않았다면 인스턴스 생성
                     if (_instance == null)
                     {
-                        // 새로운 게임오브젝트를 만들어서 싱글톤 Attach
                         var singletonObject = new GameObject($"{typeof(T)} (Singleton)");
                         _instance = singletonObject.AddComponent<T>();
                     }
@@ -40,4 +35,5 @@ public class Singleton<T> : MonoBehaviour where T : MonoBehaviour
     {
         Time.timeScale = 0;
     }
+
 }

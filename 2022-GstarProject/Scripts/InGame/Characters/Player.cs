@@ -3,103 +3,81 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using System.Linq;
-using TMPro;
+using Cysharp.Threading.Tasks;
+using UniRx;
 
 public abstract class Player : Creature
 {
-    [SerializeField] private PlayerStatData _playerStatData;
-    /// <summary>
-    /// 공격을 하고 있는 상태인지에 대한 bool값(연속터치 방지)
-    /// </summary>
-    public bool IsAttack { get;  set; }
-
-    protected bool _isAutoHunt;
-
-    protected List<UseActionType> _useSkills = new List<UseActionType>();
-    
-    private int _comboCount;
-    
-    [Header("스킬 쿨타임 모음")]
-    [SerializeField] protected CoolDown[] _skiilCoolDown;
-
-    [SerializeField] protected UsePortion _portion;
-    
-    [Header("적 탐색 범위")]
-    [SerializeField] protected float _searchRadius;
-
-    public float SearchRadius => _searchRadius;
-
-    [Header("오토모드일때 탐색 범위에 곱해지는 값")]
-    [SerializeField] protected float _autoModeSearch;
-
-    [Header("캐릭터가 이동할때마다 발자국을 남길 오브젝트")]
-    [SerializeField] private FootPrinter[] _foots;
-    
-    [SerializeField] private GameObject _autoCancelButton;
-
-    [SerializeField] private VariableJoystick _joystick;
-
-    [SerializeField] private Transform _cameraArm;
-
-    [SerializeField] private Fade _fade;
-
-    [SerializeField] private TargetPanel _targetPanel;
-
-    [SerializeField] private GameObject _deadCanvas;
-    [SerializeField] private GameObject _respawnButton;
-
-    [SerializeField] private GameObject _autoActiveEffect;
-
-    /// <summary>
-    /// 다음단계의 기본공격이 가능한지에 대한 bool값
-    /// </summary>
-    private bool _canNextNormalAttack;
-
-    /// <summary>
-    /// 기본공격 콤보가 끊어지는 시간
-    /// </summary>
-    private float _normalAttackCancelDelay;
-
-    /// <summary>
-    /// 어떤 코루틴을 stop할것인지 알기 위한 할당 변수
-    /// </summary>
-    private IEnumerator _moveCo;
-
-    protected delegate void UseActionType();
-    protected Queue<UseActionType> _autoSkill = new Queue<UseActionType>();
-
-
     /// <summary>
     /// 퀘스트를 자동 진행중인지 확인
     /// </summary>
     public bool IsQuest { get; set; }
 
-    /// <summary>
-    /// 순간이동 좌표
-    /// </summary>
-    private Transform _movePos;
+    [SerializeField] private PlayerStatObj _statObj;
+    [Header("자신의 체력 바")]
+    [SerializeField] protected FixedHpBar _hpBar;
+    [Header("기본 공격 콤보가 취소되는 시간")]
+    [SerializeField] protected float _setNormalAttackCancelTime;
+    [Header("스킬 쿨타임 모음")]
+    [SerializeField] protected CoolDown[] _skillCoolDown;
+    [Header("적 탐색 범위")]
+    [SerializeField] protected float _searchRadius;
+    [Header("Npc 대화 가능 범위")]
+    [SerializeField] protected float _npcTalkRadius;
+    [Header("오토모드일때 추가 적 탐색 범위")]
+    [SerializeField] protected float _autoModeSearch;
+    [Header("캐릭터가 이동할때마다 나타나는 이펙트")]
+    [SerializeField] private FootPrinter[] _foots;
+    [SerializeField] protected UsePortion _portion;
+    [SerializeField] private VariableJoystick _joystick;
+    [SerializeField] private Fade _fade;
+    [SerializeField] private TargetPanel _targetPanel;
+    [SerializeField] private Transform _cameraArm;
+    [SerializeField] private GameObject _autoCancelButton;
+    [SerializeField] private GameObject _deadCanvas;
+    [SerializeField] private GameObject _respawnButton;
+    [SerializeField] private GameObject _autoActiveEffect;
 
-    protected override void Awake()
+    protected bool _isAttacking;
+    protected bool _isAutoHunt;
+
+    protected bool _canNextNormalAttack;
+    protected int _comboCount;
+    protected float _normalAttackCancelTime;
+
+    private IEnumerator _moveCo;
+    private Transform _teleportPos;
+
+    protected delegate void UseActionType();
+    protected UseActionType[] _useSkills;
+    protected Queue<UseActionType> _autoSkill = new Queue<UseActionType>();
+    protected List<Transform> _targets = new List<Transform>(); //탐색된 적의 정보
+
+
+    protected virtual void Awake()
     {
-        base.Awake();
-        Stat = new Stat();
+        Stat = new PlayerStat(_statObj);
         DataManager.Instance.Player = this;
+        Init();
     }
 
-    protected virtual void Start()
+    protected override void Start()
     {
-        Stat.SetPlayerStat(_playerStatData);
-        _nav.enabled = false; //충돌이 활성화 되기 때문에 꺼줌, 사용할때만 활성화
-        _hpbar.SetHpBar(Stat.MaxHp, $"{Stat.Hp} / {Stat.MaxHp}");
+        base.Start();
+        Stat.CurHp.Subscribe(curHp => _hpBar.SetHpBar(Stat.MaxHp, curHp));
+        Stat.CurHp.Where(_ => _isAutoHunt).Subscribe(curHp => 
+        { 
+            if(curHp <= Stat.MaxHp * Global.PotionUseCondition)
+            {
+                _portion.UsePotion();
+            }
+        });
     }
 
-    protected virtual void Update()
+    private void Update()
     {
-        if (_canNextNormalAttack)
-        {
-            CheckInitCombo(); //코루틴 대신 사용
-        }
-        TouchGetTarget(); 
+        CheckInitCombo();
+        TouchGetTarget();
     }
 
     private void FixedUpdate()
@@ -107,10 +85,7 @@ public abstract class Player : Creature
         Move();
     }
     
-    /// <summary>
-    /// Queue에서 꺼낸 함수를 사용
-    /// </summary>
-    private void UseAutoSkill(UseActionType useActionType)
+    private void UseSkill(UseActionType useActionType)
     {
         useActionType();
     }
@@ -120,67 +95,65 @@ public abstract class Player : Creature
     /// </summary>
     private void SetPrioritySkill()
     {
-        for (int i = 0; i < _useSkills.Count; i++)
+        for (int i = 0; i < _useSkills.Length; i++)
         {
-            if(_skiilCoolDown[i].IsCoolDown) //쿨다운 중인 스킬은 담지 않는다.
+            if (_skillCoolDown[i].IsCoolDown) 
+            {
                 continue;
-            
-            if(!_autoSkill.Contains(_useSkills[i])) //중복 방지
+            }
+
+            if (!_autoSkill.Contains(_useSkills[i]))
+            {
                 _autoSkill.Enqueue(_useSkills[i]);
+            }
         }
     }
 
-    /// <summary>
-    /// 자동사냥 실행
-    /// </summary>
-    private IEnumerator AutoHuntCo()
+    private async UniTask ExecuteAutoHunt()
     {
-        WaitForSeconds delay = new WaitForSeconds(0.5f);
         while (true)
         {
             if (!_isAutoHunt)
+            {
                 break;
+            }
 
-            if(Stat.Hp <= Stat.MaxHp * Global._potionUseCondition)
-                _portion.UsePotion();
-            
-            if (!IsAttack)
+            if (!_isAttacking)
             {
                 SetPrioritySkill();
-                if (_autoSkill.Count == 0) //사용할 스킬이 없을때는 일반공격 사용
+                if (_autoSkill.Count == 0) 
                 {
                     UseNormalAttack();
                 }
                 else
                 {
-                    UseAutoSkill(_autoSkill.Dequeue());
+                    UseSkill(_autoSkill.Dequeue());
                 }
-                yield return delay;
+                _isAttacking = true;
             }
-            else
-            {
-                yield return null;
-            }
+            await UniTask.NextFrame();
         }
     }
     
     private void Move()
     {
-        if (!IsDead && !IsAttack)
+        if (!IsDead && !_isAttacking)
         {
             float x = _joystick.Horizontal;
             float z = _joystick.Vertical;
 
             Vector3 moveVec = new Vector3(x, 0, z);
-            transform.Translate(Vector3.forward * _joystick.Direction.magnitude * Stat.MoveSpeed * Time.fixedDeltaTime);
+            this.transform.Translate(Vector3.forward * _joystick.Direction.magnitude * Stat.MoveSpeed * Time.fixedDeltaTime);
 
             if (moveVec.sqrMagnitude == 0)
+            {
                 return;
+            }
 
             Vector3 camAngle = _cameraArm.transform.rotation.eulerAngles;
             Vector3 camDirAngle = Quaternion.LookRotation(moveVec).eulerAngles;
             Vector3 resultAngle = Vector3.up * (camAngle.y + camDirAngle.y);
-            transform.rotation = Quaternion.Euler(resultAngle);
+            this.transform.rotation = Quaternion.Euler(resultAngle);
             
             SetMoveAnim(_joystick.Direction.magnitude);
         }
@@ -189,7 +162,7 @@ public abstract class Player : Creature
     
     public void SetMoveAnim(float blend)
     {
-        _animator.SetFloat(Global.MoveBlend, blend);
+        _anim.SetFloat(Global.MoveBlend, blend);
     }
 
     /// <summary>
@@ -205,36 +178,36 @@ public abstract class Player : Creature
     /// </summary>
     public void UseTeleport(Transform movePos)
     {
-        _movePos = movePos;
+        _teleportPos = movePos;
         _fade.FadeInOut(Teleport);
     }
 
     private void Teleport()
     {
-        TouchContinue();
-        transform.position = _movePos.position;
+        CancelCurAction();
+        this.transform.position = _teleportPos.position;
     }
     
     private void Teleport(Transform movePos)
     {
-        TouchContinue();
-        transform.position = movePos.position;
+        CancelCurAction();
+        this.transform.position = movePos.position;
     }
     
     /// <summary>
-    /// 버튼을 눌렀을때 실행될 자동사냥 모드 셋팅
+    /// 자동사냥 모드 버튼
     /// </summary>
     public void SetAutoHunt()
     {
         if (!_isAutoHunt)
         {
             CancelAutoQuest();
-            IsAttack = false;
+            _isAttacking = false;
             _searchRadius *= _autoModeSearch;
             _isAutoHunt = true;
-            ActiveAutoCancelButton(true);
-            StartCoroutine(AutoHuntCo());
+            _autoCancelButton.SetActive(true);
             _autoActiveEffect.SetActive(true);
+            ExecuteAutoHunt().Forget();
         }
         else
         {
@@ -251,7 +224,7 @@ public abstract class Player : Creature
         {
             _autoActiveEffect.SetActive(false);
             SetMoveAnim(0);
-            ActiveAutoCancelButton(false);
+            _autoCancelButton.SetActive(false);
             _searchRadius /= _autoModeSearch;
             _isAutoHunt = false;
             _autoSkill.Clear();
@@ -259,10 +232,7 @@ public abstract class Player : Creature
         StopMoveCo();
     }
 
-    /// <summary>
-    /// 터치를 연속적으로 했을때에 대한 방지기능
-    /// </summary>
-    public void TouchContinue()
+    public void CancelCurAction()
     {
         CancelAutoQuest();
         
@@ -270,7 +240,7 @@ public abstract class Player : Creature
         {
             CancelAutoHunt();
         }
-        else if(!_isAutoHunt)
+        else
         {
             StopMoveCo();
         }
@@ -304,21 +274,21 @@ public abstract class Player : Creature
     private void OnDrawGizmosSelected()
     {
         Gizmos.color = Color.green;
-        Gizmos.DrawSphere(transform.position, _searchRadius);
+        Gizmos.DrawSphere(this.transform.position, _searchRadius);
     }
     
     /// <summary>
     /// 공격할 우선순위 타겟들을(searchCount 수 만큼) 지정
     /// </summary>
-    protected void CheckAttackRange(int searchCount, UseActionType useActionType)
+    protected void AddTarget(int searchCount, UseActionType useActionType)
     {
         SetMoveAnim(0);
-        Collider[] colliders = Physics.OverlapSphere(transform.position, _searchRadius, LayerMask.GetMask("Enemy"));
+        Collider[] colliders = Physics.OverlapSphere(this.transform.position, _searchRadius, LayerMask.GetMask("Enemy"));
 
         _targets.Clear();
         if (colliders.Length != 0)
         {
-            var searchList = colliders.OrderBy(col => Vector3.Distance(transform.position, col.transform.position))
+            var searchList = colliders.OrderBy(col => (this.transform.position - col.transform.position).sqrMagnitude)
                 .ToList(); //가까운 순으로 정렬
 
             for (int i = 0; i < searchCount; i++)
@@ -332,7 +302,7 @@ public abstract class Player : Creature
         }
         else
         {
-            IsAttack = false;
+            _isAttacking = false;
             CancelAutoHunt();
         }
         
@@ -354,7 +324,7 @@ public abstract class Player : Creature
             else //퀘스트 자동진행 중에 한번더 클릭 될 경우 진행 취소
             {
                 StopMoveCo();
-                IsQuest = false; 
+                IsQuest = false;
             }
             QuestManager.Instance.SetAniQuest(IsQuest);
         }
@@ -370,15 +340,15 @@ public abstract class Player : Creature
     /// </summary>
     public void UseNormalAttack()
     {
-        if (!IsAttack && !IsDead)
+        if (!_isAttacking && !IsDead)
         {
             if (_targets.Count != 0)
             {
-                ActionFromDistance(NormalAttack, _targets[0]);
+                ActionFromDistance(() => NormalAttack().Forget(), _targets[0]);
             }
             else
             {
-                CheckAttackRange(1, NormalAttack);
+                AddTarget(1, () => NormalAttack().Forget());
             }
         }
     }
@@ -417,12 +387,12 @@ public abstract class Player : Creature
 
     private void StopMoveCo()
     {
-        IsAttack = false;
+        _isAttacking = false;
         _targets.Clear();
         if (_moveCo != null)
         {
             SetMoveAnim(0);
-            _nav.isStopped = true;
+            _nav.ResetPath();
             _nav.enabled = false;
             StopCoroutine(_moveCo);
             _moveCo = null;
@@ -430,15 +400,15 @@ public abstract class Player : Creature
     }
 
     /// <summary>
-    /// 탐색 사거리 안의 적이 공격사거리 보다 클 때 공격 사거리 안에 들어올때까지 해당 적에게 이동
+    /// target에 적정 사거리까지 이동하여 Action 수행
     /// </summary>
     protected IEnumerator MoveTowardTargetCo(UseActionType useActionType, Transform target)
     {
         float goalRadius;
 
-        if (target.gameObject.layer == LayerMask.NameToLayer("NPC")) //NPC가 도착목표일 경우 좀더 가깝게 잡음
+        if (target.gameObject.layer == LayerMask.NameToLayer("NPC")) 
         {
-            goalRadius = 2;
+            goalRadius = _npcTalkRadius;
         }
         else
         {
@@ -468,53 +438,18 @@ public abstract class Player : Creature
         }
     }
 
+    protected abstract UniTask NormalAttack();
 
-    /// <summary>
-    /// 기본공격을 사용될때 실제로 동작되는 기능
-    /// </summary>
-    private void NormalAttack()
-    {
-        if (_targets.Count != 0)
-        {
-            SoundManager.Instance.PlayerPlay(PlayerSoundType.Attak1);
-            IsAttack = true;
-            transform.LookAt(new Vector3(_targets[0].position.x, transform.position.y, _targets[0].position.z));
-            _animator.SetInteger(Global.NormalAttackInteger, _comboCount++ % Global.MaxComboAttack);
-            _canNextNormalAttack = false;
-        }
-    }
-
-
-    /// <summary>
-    /// 기본 공격의 애니메이션 단계를 처음으로 초기화
-    /// </summary>
-    public void InitNormalAttack()
-    {
-        _animator.SetInteger(Global.NormalAttackInteger, Global.InitAttackCount);
-        InitAttack();
-
-        _normalAttackCancelDelay = 1f;
-        _canNextNormalAttack = true;
-    }
-
-    /// <summary>
-    /// 공격 가능한 상태로 초기화
-    /// </summary>
-    public void InitAttack()
-    {
-        IsAttack = false;
-    }
-
-    /// <summary>
-    /// 콤보를 초기화
-    /// </summary>
     private void CheckInitCombo()
     {
-        _normalAttackCancelDelay -= Time.deltaTime;
-        if (_normalAttackCancelDelay <= 0)
+        if (_canNextNormalAttack)
         {
-            _comboCount = 0;
-            _canNextNormalAttack = false;
+            _normalAttackCancelTime -= Time.deltaTime;
+            if (_normalAttackCancelTime <= 0)
+            {
+                _comboCount = 1;
+                _canNextNormalAttack = false;
+            }
         }
     }
 
@@ -530,27 +465,21 @@ public abstract class Player : Creature
 
     public void ActiveFootPrinters(bool active)
     {
-        foreach (var foot in _foots)
+        for (int i = 0; i < _foots.Length; i++)
         {
-            foot.ActiveFoot(active);
+             _foots[i].ActiveFoot(active);
         }
-    }
-
-    public override void TryGetDamage(Stat stat, Attack attack)
-    {
-        base.TryGetDamage(stat, attack);
-        UpdateHpBar();
     }
 
     protected override void Die()
     {
         base.Die();
         SoundManager.Instance.PlayerPlay(PlayerSoundType.Die);
-        _animator.SetTrigger(Global.DeadTrigger);
+        _anim.Play(Global.Dead);
         _fade.FadeIn();
         _deadCanvas.SetActive(true);
         UIManager.Instance.CloseAll();
-        Invoke("SetRespawnButton", 1.5f);
+        Invoke(nameof(SetRespawnButton), 1.5f);
     }
 
     private void SetRespawnButton()
@@ -564,33 +493,28 @@ public abstract class Player : Creature
     public void Respawn()
     {
         Init();
+        MapManager.Instance.DunArea.Clear();//던전에서 죽었을 경우
+        _respawnButton.SetActive(false);
+        _deadCanvas.SetActive(false);
+        Teleport(MapManager.Instance.GetSpwan(1));
+        _fade.FadeOut();
     }
 
     protected override void Init()
     {
         base.Init();
+        _nav.enabled = false;
         _targets.Clear();
         this.gameObject.layer = LayerMask.NameToLayer("Player");
-        _respawnButton.SetActive(false);
-        _deadCanvas.SetActive(false);
-        MapManager.Instance.DunArea.Init();//던전에서 죽었을 경우
-        Teleport(MapManager.Instance.GetSpwan(1));
-        UpdateHpBar();
-        _fade.FadeOut();
+        _comboCount = 1;
     }
 
     public void DeleteTarget(Transform target)
     {
         if (_targets.Contains(target))
+        {
             _targets.Remove(target);
-    }
-    
-    /// <summary>
-    /// 자동사냥 취소 버튼 생성
-    /// </summary>
-    private void ActiveAutoCancelButton(bool isActive)
-    {
-        _autoCancelButton.SetActive(isActive);
+        }
     }
 
     /// <summary>
@@ -598,14 +522,24 @@ public abstract class Player : Creature
     /// </summary>
     public void SetInvincibility(bool isActive)
     {
-        if(isActive)
+        if (isActive)
+        {
             this.gameObject.layer = LayerMask.NameToLayer("Invincibility");
+        }
         else
         {
             this.gameObject.layer = LayerMask.NameToLayer("Player");
         }
     }
 
+    public float GetSearchRadius()
+    {
+        return _searchRadius;
+    }
 
+    public void UpdateHpBar()
+    {
+        _hpBar.SetHpBar(Stat.MaxHp, Stat.CurHp.Value);
+    }
   
 }

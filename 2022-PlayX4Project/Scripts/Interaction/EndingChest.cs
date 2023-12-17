@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class EndingChest : Interaction
+public sealed class EndingChest : Interaction
 {
 
     private void Awake()

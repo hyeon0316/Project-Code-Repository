@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
-public class Assassin : Enemy, IEnemyMove, IEnemyAttack
+public sealed class Assassin : Enemy, IEnemyMove, IEnemyAttack
 {
     public Enemystate Enemystate;
 

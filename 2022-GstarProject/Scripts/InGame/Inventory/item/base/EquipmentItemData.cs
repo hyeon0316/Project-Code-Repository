@@ -42,20 +42,7 @@ public abstract class EquipmentItemData : ItemData
     public ItemStat GetStat()
     {
         Stat = new ItemStat();
-        Stat.Attack = _damage;
-        Stat.HitPercent = _hit;
-        Stat.SkillDamage = _skillDamage;
-        Stat.AllDamge = _allDamage;
-
-        Stat.Defense = _defense;
-        Stat.Dodge = _evasion;
-        Stat.ReduceDamage = _allDefense;
-
-        Stat.MaxHp = _hp;
-        Stat.MaxMp = _mp;
-        Stat.MaxPostion = _postion;
-        Stat.RecoveryHp = _hpRe;
-        Stat.RecoveryMp = _mpRe;
+        Stat.Set(_damage, _hit, _skillDamage, _allDamage, _defense, _evasion, _allDefense, _hp, _mp, _postion, _hpRe, _mpRe);
 
         return Stat;
     }

@@ -6,29 +6,23 @@ using UnityEngine;
 
 public class FootPrint : MonoBehaviour
 {
-   [SerializeField] private float _printSpeed;
-   
-   
-   
-   /// <summary>
-   /// 발자국 오브젝트 생성
-   /// </summary>
-   public void Print()
-   {
-      StartCoroutine(PrintCo());
-   }
+    [SerializeField] private float _printSpeed;
 
-   private IEnumerator PrintCo()
-   {
-      transform.DOScale(new Vector3(0.5f, 0.5f, 0.5f), _printSpeed);
-      yield return new WaitForSeconds(_printSpeed);
-      transform.DOScale(new Vector3(0, 0, 0), _printSpeed);
-      yield return new WaitForSeconds(_printSpeed);
-      DisableFoot();
-   }
+    /// <summary>
+    /// 발자국 오브젝트 생성
+    /// </summary>
+    public void Print()
+    {
+        StartCoroutine(PrintCo());
+    }
 
-   private void DisableFoot()
-   {
-      ObjectPoolManager.Instance.ReturnObject(PoolType.SnowFootPrint, this.gameObject);
-   }
+    private IEnumerator PrintCo()
+    {
+        transform.DOScale(new Vector3(0.5f, 0.5f, 0.5f), _printSpeed);
+        yield return new WaitForSeconds(_printSpeed);
+        transform.DOScale(new Vector3(0, 0, 0), _printSpeed);
+        yield return new WaitForSeconds(_printSpeed);
+        ObjectPoolManager.Instance.ReturnObject(PoolType.SnowFootPrint, this.gameObject);
+    }
+
 }
