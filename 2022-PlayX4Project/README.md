@@ -37,14 +37,14 @@
 
     #### 코드 목록
     - 대화 진행 관리
-      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Manager/DialogueManager.cs#L44-L64
-      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Manager/DialogueManager.cs#L72-L110
-      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Manager/DialogueManager.cs#L179-L194
+      https://github.com/hyeon0316/Project-Code-Repository/blob/96b1527e6c53af4c6a3197737bbf86ef5d536e39/2022-PlayX4Project/Scripts/Manager/DialogueManager.cs#L44-L64
+      https://github.com/hyeon0316/Project-Code-Repository/blob/96b1527e6c53af4c6a3197737bbf86ef5d536e39/2022-PlayX4Project/Scripts/Manager/DialogueManager.cs#L72-L110
+      https://github.com/hyeon0316/Project-Code-Repository/blob/96b1527e6c53af4c6a3197737bbf86ef5d536e39/2022-PlayX4Project/Scripts/Manager/DialogueManager.cs#L179-L194
       <br/>
     - json 데이터 관리
-      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Manager/JsonToDataManager.cs#L16-L50
+      https://github.com/hyeon0316/Project-Code-Repository/blob/96b1527e6c53af4c6a3197737bbf86ef5d536e39/2022-PlayX4Project/Scripts/Manager/JsonToDataManager.cs#L9-L66
     - Fade 시스템
-      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Manager/FadeManager.cs#L16-L66
+      https://github.com/hyeon0316/Project-Code-Repository/blob/96b1527e6c53af4c6a3197737bbf86ef5d536e39/2022-PlayX4Project/Scripts/Manager/FadeManager.cs#L7-L66
       <br/>
     - 캐릭터 구조
       https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Life/Life.cs#L19-L84
@@ -56,7 +56,7 @@
       https://github.com/hyeon0316/Project-Code-Repository/blob/798797c9fbadeee783a3c8bf3c3afdd2427631f1/2022-PlayX4Project/Scripts/Interaction/Npc.cs#L6-L73
       <br/>
     - 적 패턴 구현
-      https://github.com/hyeon0316/Project-Code-Repository/blob/7d37d1991328a71d5804f28227701a2eaf16dee0/2022-PlayX4Project/Scripts/Life/Enemy/Necromancer.cs#L30-L99
+      https://github.com/hyeon0316/Project-Code-Repository/blob/96b1527e6c53af4c6a3197737bbf86ef5d536e39/2022-PlayX4Project/Scripts/Life/Enemy/Necromancer.cs#L28-L96
       <br/>
    
       
