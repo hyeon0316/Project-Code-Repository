@@ -47,18 +47,18 @@
     https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Characters/Player.cs#L359-L386
     https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Characters/Player.cs#L402-L439
 
-    -적 패턴 구현(대기 모드, 추적 모드, 공격, 일정지역 벗어나면 복귀)
+    - 적 패턴 구현(대기 모드, 추적 모드, 공격, 일정지역 벗어나면 복귀)
     https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Characters/Enemy.cs#L86-L206
   
-    -라인 렌더러를 응용한 체인 라이트닝 구현
+    - 라인 렌더러를 응용한 체인 라이트닝 구현
     https://github.com/hyeon0316/Project-Code-Repository/blob/f238bdcd8ae6670aad59e1cc850fa2164ec4f9b0/2022-GstarProject/Scripts/InGame/Characters/Player/Mage/ChainLightningLine.cs#L8-L269
     
-    -모든 캐릭터가 사용하는 Stat(Hp의 경우 UniRx로 개체마다 다른 반응을 구현)
+    - 모든 캐릭터가 사용하는 Stat(Hp의 경우 UniRx로 개체마다 다른 반응을 구현)
     https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Stat/Stat.cs#L6-L37
     https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Stat/EnemyStat.cs#L4-L23
     https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Stat/PlayerStat.cs#L4-L61
     
-    -적 스폰 관리
+    - 적 스폰 관리
     https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Characters/Enemy/EnemySpawnArea.cs#L7-L117
     
     
