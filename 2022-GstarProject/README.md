@@ -23,42 +23,43 @@
     - `오클루전 컬링` 사용으로 필요없는 부분 렌더링 방지
     - `추상 함수 및 가상 함수`의 재정의를 통하여 함수의 재사용 및 확장성 고려
     - `오브젝트 풀링`을 사용하여 불필요한 GC 호출 방지
-     - `ScriptableObject`를 사용하여 캐릭터의 스텟 관리
-     - `NavMesh`를 사용하여 플레이어의 오토모드에 사용 될 이동 관련 구현
-     - `코루틴 및 재귀함수`를 사용하여 플레이어의 자동사냥 구현 및 적 패턴 구현
-     - `라인 렌더러` 를 응용하여 플레이어 스킬 구현
-     - 지속적인 데이터 관리를 위한 `싱글톤` 사용
-     - 프레임 향상을 위해 플레이어 이동 지역마다 해당 적들만 활성화
-     - `딕셔너리`를 사용하여 원하는 몬스터 종류(Key)와 스폰 수(Value)를 인스펙터에서 조정 가능하도록 함
-    
+    - `ScriptableObject`를 사용하여 캐릭터의 스탯 관리
+    - `NavMesh`를 사용하여 플레이어 및 적 기능 구현
+    - `코루틴 및 재귀함수`를 사용하여 플레이어의 자동사냥 구현 및 적 패턴 구현
+    - `라인 렌더러` 를 응용하여 플레이어 스킬 구현
+    - 적 스포너 구현
+    #### 리팩토링 및 성능 개선 시도 목록
+    - 게임 특징상 많은 적이 한 씬에 한번에 있는 경우가 있기 때문에 기존 적 패턴 구현에 사용했던 코루틴에서 GC생성을 방지하고자 `UniTask`로 변경
+    - 캐릭터의 체력관리를 `UniRx`로 변경하여 체력 변동 될 때 개체마다 다른 반응 구현(의존성 제거, 코드 가독성 향상)
+    - 움직이지 않는 구조물에 대해 `정적 배칭`하여 드로우콜 감소 
+    - 애니메이터를 파라미터에서 코드로 관리하여 유지보수 하기 용이하게 마련
     
     #### 코드 목록
     - 오브젝트 풀링(생성, 사용, 반환)
-    https://github.com/hyeon0316/Project-Code-Repository/blob/f238bdcd8ae6670aad59e1cc850fa2164ec4f9b0/2022-GstarProject/Scripts/Manager/ObjectPoolManager.cs#L68-L141
+    https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/Manager/ObjectPoolManager.cs#L36-L138
     
-    - 모든 캐릭터의 부모가 되는 추상 클래스
-    https://github.com/hyeon0316/Project-Code-Repository/blob/f238bdcd8ae6670aad59e1cc850fa2164ec4f9b0/2022-GstarProject/Scripts/InGame/Characters/Creature.cs#L15-L145
+    - 모든 캐릭터의 부모 클래스 설계
+    https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Characters/Creature.cs#L9-L105
     
-    - 플레이어의 오토 모드(적 탐색, 자동사냥, 자동이동)
-    https://github.com/hyeon0316/Project-Code-Repository/blob/f238bdcd8ae6670aad59e1cc850fa2164ec4f9b0/2022-GstarProject/Scripts/InGame/Characters/Player.cs#L313-L339
-    https://github.com/hyeon0316/Project-Code-Repository/blob/f238bdcd8ae6670aad59e1cc850fa2164ec4f9b0/2022-GstarProject/Scripts/InGame/Characters/Player.cs#L113-L165
-    https://github.com/hyeon0316/Project-Code-Repository/blob/f238bdcd8ae6670aad59e1cc850fa2164ec4f9b0/2022-GstarProject/Scripts/InGame/Characters/Player.cs#L432-L469
-    
+    - 플레이어 오토 모드(적 탐색, 자동사냥, 자동이동)
+    https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Characters/Player.cs#L88-L136
+    https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Characters/Player.cs#L283-L309
+    https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Characters/Player.cs#L359-L386
+    https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Characters/Player.cs#L402-L439
+
+    -적 패턴 구현(대기 모드, 추적 모드, 공격, 일정지역 벗어나면 복귀)
+    https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Characters/Enemy.cs#L86-L206
+  
     -라인 렌더러를 응용한 체인 라이트닝 구현
     https://github.com/hyeon0316/Project-Code-Repository/blob/f238bdcd8ae6670aad59e1cc850fa2164ec4f9b0/2022-GstarProject/Scripts/InGame/Characters/Player/Mage/ChainLightningLine.cs#L8-L269
     
-    -모든 캐릭터가 가지는 일반 공격 or 스킬 공격에 대한 추상 클래스
-    https://github.com/hyeon0316/Project-Code-Repository/blob/f238bdcd8ae6670aad59e1cc850fa2164ec4f9b0/2022-GstarProject/Scripts/InGame/Characters/Attack/Attack.cs#L5-L25
+    -모든 캐릭터가 사용하는 Stat(Hp의 경우 UniRx로 개체마다 다른 반응을 구현)
+    https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Stat/Stat.cs#L6-L37
+    https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Stat/EnemyStat.cs#L4-L23
+    https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Stat/PlayerStat.cs#L4-L61
     
-    
-    -모든 적의 부모가 되는 추상 클래스(패턴 구현)
-    https://github.com/hyeon0316/Project-Code-Repository/blob/f238bdcd8ae6670aad59e1cc850fa2164ec4f9b0/2022-GstarProject/Scripts/InGame/Characters/Enemy.cs#L11-L378
-    
-    -모든 캐릭터가 사용하는 Stat(ScriptableObject로 저장된 데이터를 불러와서 사용)
-    https://github.com/hyeon0316/Project-Code-Repository/blob/f238bdcd8ae6670aad59e1cc850fa2164ec4f9b0/2022-GstarProject/Scripts/InGame/Stat/Stat.cs#L8-L67
-    
-    -적 스폰 관리(SerializeDictionary 에셋 활용)
-    https://github.com/hyeon0316/Project-Code-Repository/blob/f238bdcd8ae6670aad59e1cc850fa2164ec4f9b0/2022-GstarProject/Scripts/InGame/Characters/Enemy/EnemySpawnArea.cs#L9-L145
+    -적 스폰 관리
+    https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Characters/Enemy/EnemySpawnArea.cs#L7-L117
     
     
     
