@@ -33,10 +33,14 @@
     - 캐릭터의 체력관리를 `UniRx`로 변경하여 체력 변동 될 때 개체마다 다른 반응 구현(의존성 제거, 코드 가독성 향상)
     - 움직이지 않는 구조물에 대해 `정적 배칭`하여 드로우콜 감소 
     - 애니메이터를 파라미터에서 코드로 관리하여 유지보수 하기 용이하게 마련
+    - 오브젝트 풀링 매니저 로직 분리(단일 책임 원칙)
     
     #### 코드 목록
     - 오브젝트 풀링(생성, 사용, 반환)
-    https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/Manager/ObjectPoolManager.cs#L36-L138
+    https://github.com/hyeon0316/Project-Code-Repository/blob/aa7af714b54886cd58cb75cb74233ee37693d886/2022-GstarProject/Scripts/Manager/ObjectPool/ObjectPoolManager.cs#L6-L31
+    https://github.com/hyeon0316/Project-Code-Repository/blob/aa7af714b54886cd58cb75cb74233ee37693d886/2022-GstarProject/Scripts/Manager/ObjectPool/PoolContainer.cs#L5-L52
+    https://github.com/hyeon0316/Project-Code-Repository/blob/aa7af714b54886cd58cb75cb74233ee37693d886/2022-GstarProject/Scripts/Manager/ObjectPool/IPoolable.cs#L1-L4
+    
     
     - 모든 캐릭터의 부모 클래스 설계
     https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Characters/Creature.cs#L9-L105
@@ -59,7 +63,7 @@
     https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Stat/PlayerStat.cs#L4-L61
     
     - 적 스폰 관리
-    https://github.com/hyeon0316/Project-Code-Repository/blob/b9d6e73dd0f21e766865767f4d92d27c02f8166a/2022-GstarProject/Scripts/InGame/Characters/Enemy/EnemySpawnArea.cs#L7-L117
+    https://github.com/hyeon0316/Project-Code-Repository/blob/aa7af714b54886cd58cb75cb74233ee37693d886/2022-GstarProject/Scripts/InGame/Characters/Enemy/EnemySpawnArea.cs#L7-L125
     
     
     
