@@ -14,7 +14,12 @@ public sealed class Mage : Player
         WindAttack,
         SpikeAttack
     }
-    
+
+    [SerializeField] private GameObject _normalMissilePrefab;
+    [SerializeField] private GameObject _wideAreaPrefab;
+    [SerializeField] private GameObject _spikePrefab;
+    [SerializeField] private GameObject _windPrefab;
+
     [Header("기본공격 발사체 위치")]
     [SerializeField] private LongAttackCreator _normalAttackPos;
 
@@ -29,6 +34,9 @@ public sealed class Mage : Player
         base.Awake();
         _useSkills = new UseActionType[] 
         { UseWideAreaBarrage, UseChainLightning, UseBulletRain, UseWindAttack, UseSpikeAttack };
+        ObjectPoolManager.Instance.Init(_normalMissilePrefab, 4);
+        ObjectPoolManager.Instance.Init(_spikePrefab, 1);
+        ObjectPoolManager.Instance.Init(_windPrefab, 1);
     }
 
 
@@ -37,7 +45,7 @@ public sealed class Mage : Player
         if (_targets.Count != 0)
         {
             SoundManager.Instance.PlayerPlay(PlayerSoundType.NormalAttack);
-            var obj = _normalAttackPos.CreateLongAttack<NormalAttackMissile>(PoolType.NormalAttackMissile);
+            var obj = _normalAttackPos.CreateLongAttack<NormalAttackMissile>(_normalMissilePrefab);
             obj.SetStat(Stat);
             obj.Init(_targets[0]);
         }
@@ -120,7 +128,7 @@ public sealed class Mage : Player
     {
         if (_targets.Count != 0)
         {
-            SpikeAttack spike = ObjectPoolManager.Instance.GetObject(PoolType.VolcanicSpike, false).GetComponent<SpikeAttack>();
+            SpikeAttack spike = ObjectPoolManager.Instance.GetObject(_spikePrefab, false).GetComponent<SpikeAttack>();
             spike.SetTransform(_targets[0]);
             spike.gameObject.SetActive(true);
             spike.CallEvent();
@@ -254,7 +262,7 @@ public sealed class Mage : Player
     {
         if (_targets.Count != 0)
         {
-            WindAttack windAttack = ObjectPoolManager.Instance.GetObject(PoolType.WindAttack, false).GetComponent<WindAttack>();
+            WindAttack windAttack = ObjectPoolManager.Instance.GetObject(_windPrefab, false).GetComponent<WindAttack>();
             windAttack.SetTransform(_targets[0]);
             windAttack.gameObject.SetActive(true);
             windAttack.CallEvent();
@@ -304,7 +312,7 @@ public sealed class Mage : Player
     {
         if (_targets.Count != 0)
         {
-            var wideArea = ObjectPoolManager.Instance.GetObject(PoolType.WideAreaBarrage).GetComponent<WideAreaBarrageEffect>();
+            var wideArea = ObjectPoolManager.Instance.GetObject(_wideAreaPrefab).GetComponent<WideAreaBarrageEffect>();
             wideArea.SetTransform(_targets[0]);
             wideArea.CallEvent();
         }

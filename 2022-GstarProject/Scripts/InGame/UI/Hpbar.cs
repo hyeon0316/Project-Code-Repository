@@ -12,7 +12,7 @@ public class Hpbar : MonoBehaviour
     private Camera _cam;
 
 
-    private void Awake()
+    private void Start()
     {
         _cam = Camera.main;
         gameObject.GetComponent<Canvas>().worldCamera = _cam;

@@ -7,7 +7,7 @@ using UnityEngine;
 [System.Serializable]
 public struct SpawnEnemy
 {
-    public PoolType Type;
+    public GameObject EnemyPrefab;
     public int Count;
 }
 
@@ -23,7 +23,15 @@ public class EnemySpawnArea : MonoBehaviour
     [SerializeField] private BoxCollider _boxCollider;
 
     private List<Enemy> _enemyList = new List<Enemy>();
-    private int _difficulty; 
+    private int _difficulty;
+
+    private void Awake()
+    {
+        for (int i = 0; i < _spawnEnemys.Length; i++)
+        {
+            ObjectPoolManager.Instance.Init(_spawnEnemys[i].EnemyPrefab, _spawnEnemys[i].Count);
+        }
+    }
 
     private void OnEnable()
     {
@@ -41,7 +49,7 @@ public class EnemySpawnArea : MonoBehaviour
         {
             for (int j = 0; j < _spawnEnemys[i].Count; j++)
             {
-                Enemy enemy = ObjectPoolManager.Instance.GetObject(_spawnEnemys[i].Type, false).GetComponent<Enemy>();
+                Enemy enemy = ObjectPoolManager.Instance.GetObject(_spawnEnemys[i].EnemyPrefab, false).GetComponent<Enemy>();
                 AddEnemy(enemy);
                 if (_isDungeon)
                 {
@@ -61,7 +69,7 @@ public class EnemySpawnArea : MonoBehaviour
         _enemyList.Remove(returnEnemy);
 
         int index = UnityEngine.Random.Range(0, _spawnEnemys.Length);
-        Enemy enemy = ObjectPoolManager.Instance.GetObject(_spawnEnemys[index].Type).GetComponent<Enemy>();
+        Enemy enemy = ObjectPoolManager.Instance.GetObject(_spawnEnemys[index].EnemyPrefab).GetComponent<Enemy>();
         AddEnemy(enemy);
         if (_isDungeon)
         {
@@ -74,7 +82,7 @@ public class EnemySpawnArea : MonoBehaviour
     {
         for (int i = 0; i < _enemyList.Count; i++)
         {
-            ObjectPoolManager.Instance.ReturnObject(_enemyList[i].GetEnemyType(), _enemyList[i].gameObject);
+            ObjectPoolManager.Instance.ReturnObject(_enemyList[i].gameObject);
         }
         _enemyList.Clear();
     }

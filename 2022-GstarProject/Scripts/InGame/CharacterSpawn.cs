@@ -1,3 +1,4 @@
+using Cinemachine;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -18,7 +19,7 @@ public class CharacterSpawn : MonoBehaviour
     private void Spawn()
     {
         GameObject player = Instantiate(CharPrefabs[(int) DataManager.Instance.SelectJobType]);
-        player.transform.position = transform.position;//생성 위치
+        player.transform.position = this.transform.position;//생성 위치
         player.name = $"{DataManager.Instance.SelectJobType}";
     }
 }

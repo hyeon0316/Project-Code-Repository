@@ -5,19 +5,20 @@ using UnityEngine;
 using Object = System.Object;
 using Random = UnityEngine.Random;
 
-public sealed class WideAreaBarrageEffect : SkillAttack
+public sealed class WideAreaBarrageEffect : SkillAttack, IPoolable
 {
-   [Header("데미지가 적용되기 까지 시간")]
-   [SerializeField] private float _dealTime;
+    public int InstanceId { get; set; }
+    [Header("데미지가 적용되기 까지 시간")]
+    [SerializeField] private float _dealTime;
 
-   private AudioSource _audioSource;
+    private AudioSource _audioSource;
 
-   private void Awake()
-   {
-      _audioSource = GetComponent<AudioSource>();
-   }
+    private void Awake()
+    {
+        _audioSource = GetComponent<AudioSource>();
+    }
 
-   private Dictionary<Collider, IEnumerator> _targets = new Dictionary<Collider, IEnumerator>();
+    private Dictionary<Collider, IEnumerator> _targets = new Dictionary<Collider, IEnumerator>();
 
 
     public void SetTransform(Transform target)
@@ -33,33 +34,33 @@ public sealed class WideAreaBarrageEffect : SkillAttack
 
     private void DisableObject()
     {
-        ObjectPoolManager.Instance.ReturnObject(PoolType.WideAreaBarrage, this.gameObject);
+        ObjectPoolManager.Instance.ReturnObject(this.gameObject);
     }
 
 
     private void OnTriggerEnter(Collider other)
-   {
-      if (other.gameObject.layer == LayerMask.NameToLayer("Enemy"))
-      {
+    {
+        if (other.gameObject.layer == LayerMask.NameToLayer("Enemy"))
+        {
             if (!_targets.ContainsKey(other))
             {
                 _targets.Add(other, TakeBarrageDamageCo(other.GetComponent<Creature>()));
                 StartCoroutine(_targets[other]);
             }
-      }
-   }
+        }
+    }
 
-   private void OnTriggerExit(Collider other)
-   {
-      if (other.gameObject.layer == LayerMask.NameToLayer("Enemy"))
-      {
-         if (_targets.ContainsKey(other))
-         {
-            StopCoroutine(_targets[other]);
-            _targets.Remove(other);
-         }
-      }
-   }
+    private void OnTriggerExit(Collider other)
+    {
+        if (other.gameObject.layer == LayerMask.NameToLayer("Enemy"))
+        {
+            if (_targets.ContainsKey(other))
+            {
+                StopCoroutine(_targets[other]);
+                _targets.Remove(other);
+            }
+        }
+    }
 
     private IEnumerator TakeBarrageDamageCo(Creature enemy)
     {

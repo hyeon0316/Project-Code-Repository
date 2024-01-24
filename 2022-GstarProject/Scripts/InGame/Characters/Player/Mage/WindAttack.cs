@@ -3,14 +3,16 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public sealed class WindAttack : SkillAttack
+public sealed class WindAttack : SkillAttack, IPoolable
 {
+    public int InstanceId { get; set; }
     [SerializeField] private float _moveSpeed;
 
     [Header("데미지가 적용되기 까지 시간")]
     [SerializeField] private float _dealTime;
 
     private Dictionary<Collider, IEnumerator> _targets = new Dictionary<Collider, IEnumerator>();
+
 
     public void SetTransform(Transform target)
     {
@@ -36,7 +38,7 @@ public sealed class WindAttack : SkillAttack
     private void DisableObject()
     {
         StopCoroutine(MoveCo());
-        ObjectPoolManager.Instance.ReturnObject(PoolType.WindAttack, this.gameObject);
+        ObjectPoolManager.Instance.ReturnObject(this.gameObject);
     }
 
     private void OnTriggerEnter(Collider other)

@@ -46,7 +46,7 @@ public class QuestData : ScriptableObject
 public abstract class Objective
 {
     
-    public PoolType[] EnemyID;
+    public EnemyType[] EnemyID;
     public int amount;
     public int currentAmount  { get; set; }
 

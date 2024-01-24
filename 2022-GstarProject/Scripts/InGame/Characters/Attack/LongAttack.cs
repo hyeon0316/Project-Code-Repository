@@ -2,12 +2,12 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class LongAttack : Attack
+public class LongAttack : Attack, IPoolable
 {
-    [SerializeField] private PoolType _curPoolType;
+    public int InstanceId { get; set; }
 
     protected virtual void CallDisableEvent()
     {
-        ObjectPoolManager.Instance.ReturnObject(_curPoolType, this.gameObject);
+        ObjectPoolManager.Instance.ReturnObject(this.gameObject);
     }
 }

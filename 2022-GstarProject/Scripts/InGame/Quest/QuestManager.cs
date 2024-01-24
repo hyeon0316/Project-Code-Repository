@@ -46,7 +46,7 @@ public class QuestManager : Singleton<QuestManager>
         questUI.gameObject.SetActive(false);
     }
     /// <summary> 퀘스트 Enemy체크 _id </summary>
-    public void CheckEnemyQuest(PoolType _id)
+    public void CheckEnemyQuest(EnemyType _id)
     {
         if (quests[_mainId].type == QuestType.KillEnemy)
         {

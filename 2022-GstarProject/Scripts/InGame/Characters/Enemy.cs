@@ -7,10 +7,26 @@ using UnityEngine;
 using Random = UnityEngine.Random;
 using UniRx;
 
-public abstract class Enemy : Creature
+public enum EnemyType
 {
+    Spider,
+    FrightFly,
+    ForestGolem1,
+    ForestGolem2,
+    ForestGolem3,
+    SpecialGolem,
+    GoblinWarrior,
+    GoblinArcher,
+    Goblin,
+    Boss,
+}
+
+public abstract class Enemy : Creature, IPoolable
+{
+    public int InstanceId { get; set; }
+
     [SerializeField] private string _name;
-    [SerializeField] private PoolType _curEnemyType;
+    [SerializeField] private EnemyType _curEnemyType;
     [SerializeField] private EnemyStatObj _statObj;
     [SerializeField] private Hpbar _hpBar;
     [Header("스폰지점으로 돌아가기 전 까지 거리")]
@@ -24,6 +40,7 @@ public abstract class Enemy : Creature
     private CancellationTokenSource _moveToken;
     private CancellationTokenSource _attackToken;
     private CancellationTokenSource _backToken;
+
 
     protected virtual void Awake()
     {
@@ -254,7 +271,7 @@ public abstract class Enemy : Creature
     public void Hide()
     {
         _dissolve.DissolveOutAsync().ContinueWith(
-            ()=> ObjectPoolManager.Instance.ReturnObject(_curEnemyType, this.gameObject)
+            ()=> ObjectPoolManager.Instance.ReturnObject(this.gameObject)
         ).Forget();
     }    
 
@@ -264,7 +281,6 @@ public abstract class Enemy : Creature
         {
             if (_isFollow && !IsDead)
             {
-                //만약 돌아가는중에 공격을 다시 받는상황이면?
                 MeasureDistAsync(this.transform.position).ContinueWith(() => BackAreaAsync(_backToken)).Forget();
             }
         }
@@ -275,11 +291,6 @@ public abstract class Enemy : Creature
         _spawnArea = area;
     }
     
-    public PoolType GetEnemyType()
-    {
-        return _curEnemyType;
-    }
-
     private void CheckAndCancelToken(CancellationTokenSource token)
     {
         if(token != null)

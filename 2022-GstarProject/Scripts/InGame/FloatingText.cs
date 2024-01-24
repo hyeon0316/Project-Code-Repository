@@ -7,6 +7,7 @@ using UnityEngine;
 
 public class FloatingText : MonoBehaviour
 {
+    [SerializeField] private GameObject _textPrefab;
    /// <summary>
    /// 한번에 투명화 되면서 사라질 오브젝트 모임
    /// </summary>
@@ -17,16 +18,19 @@ public class FloatingText : MonoBehaviour
 
    private float _moveIndex;
    
-
    /// <summary>
    /// 텍스트가 사라지기 까지 시간
    /// </summary>
    [SerializeField] private float _clearTime;
 
-  
-   public void CreateFloatingText(string damage)
+    private void Awake()
+    {
+        ObjectPoolManager.Instance.Init(_textPrefab, 5);
+    }
+
+    public void CreateFloatingText(string damage)
    {
-      GameObject floating = ObjectPoolManager.Instance.GetObject(PoolType.DamageText);
+      GameObject floating = ObjectPoolManager.Instance.GetObject(_textPrefab);
       _clearTexts.Add(floating);
       floating.transform.position = transform.position;
       floating.GetComponent<DamageText>().SetDamageText(damage, transform);

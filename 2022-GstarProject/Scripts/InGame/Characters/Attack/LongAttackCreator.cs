@@ -4,18 +4,18 @@ using UnityEngine;
 
 public class LongAttackCreator : MonoBehaviour
 {
-    public void CreateLongAttack(PoolType poolType, Stat stat)
+    public void CreateLongAttack(GameObject longAttackObj, Stat stat)
     {
-        var longAttack = ObjectPoolManager.Instance.GetObject(poolType);
+        var longAttack = ObjectPoolManager.Instance.GetObject(longAttackObj);
         longAttack.transform.position = this.transform.position;
         longAttack.transform.rotation = this.transform.rotation;
 
         longAttack.GetComponent<Attack>().SetStat(stat);
     }
 
-    public T CreateLongAttack<T>(PoolType poolType) where T : LongAttack
+    public T CreateLongAttack<T>(GameObject longAttackObj) where T : LongAttack
     {
-        T longAttack = ObjectPoolManager.Instance.GetObject(poolType).GetComponent<T>();
+        T longAttack = ObjectPoolManager.Instance.GetObject(longAttackObj).GetComponent<T>();
         longAttack.transform.position = this.transform.position;
         longAttack.transform.rotation = this.transform.rotation;
 

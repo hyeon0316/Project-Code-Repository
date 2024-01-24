@@ -7,6 +7,7 @@ using UniRx;
 
 public sealed class Boss : Enemy
 {
+    [SerializeField] private GameObject _rockPrefab;
     [SerializeField] private FixedHpBar _fixedHpBar;
     [SerializeField] private Attack _attack;
     [SerializeField] private LongAttackCreator _rockPos;
@@ -16,6 +17,12 @@ public sealed class Boss : Enemy
     private int _attackOrder;
     private int _patternOrder;
     private bool _isNextPattern;
+
+    protected override void Awake()
+    {
+        base.Awake();
+        ObjectPoolManager.Instance.Init(_rockPrefab, 1);
+    }
 
     protected override void Start()
     {
@@ -84,7 +91,7 @@ public sealed class Boss : Enemy
         await UniTask.NextFrame();
         var animDelay = TimeSpan.FromSeconds(_anim.GetCurrentAnimatorStateInfo(0).length * 0.3f);
         await UniTask.Delay(animDelay);
-        _rockPos.CreateLongAttack(PoolType.BossRock, Stat);
+        _rockPos.CreateLongAttack(_rockPrefab, Stat);
         _anim.CrossFade(Global.Idle, 0.3f);
         await UniTask.Delay(TimeSpan.FromSeconds(_attackDelay));
     }

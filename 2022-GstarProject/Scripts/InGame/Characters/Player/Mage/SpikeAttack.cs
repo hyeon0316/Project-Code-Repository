@@ -3,8 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public sealed class SpikeAttack : SkillAttack
+public sealed class SpikeAttack : SkillAttack, IPoolable
 {
+    public int InstanceId { get; set; }
+
     private AudioSource _audioSource;
 
     private void Awake()
@@ -25,7 +27,7 @@ public sealed class SpikeAttack : SkillAttack
 
     private void DisableObject()
     {
-        ObjectPoolManager.Instance.ReturnObject(PoolType.VolcanicSpike, this.gameObject);
+        ObjectPoolManager.Instance.ReturnObject(this.gameObject);
     }
 
 

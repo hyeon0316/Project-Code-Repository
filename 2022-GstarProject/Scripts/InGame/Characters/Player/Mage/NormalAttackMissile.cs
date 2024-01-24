@@ -6,40 +6,45 @@ using Random = UnityEngine.Random;
 
 public sealed class NormalAttackMissile : LongAttack
 {
-   [SerializeField] private float _missileSpeed;
-   private Transform _target;
- 
+    [SerializeField] private GameObject _hitEffectPrefab;
+    [SerializeField] private float _missileSpeed;
+    private Transform _target;
 
-   private void FixedUpdate()
-   {
-      MoveToTarget();
-   }
+    private void Awake()
+    {
+        ObjectPoolManager.Instance.Init(_hitEffectPrefab, 1);      
+    }
 
-   private void MoveToTarget()
-   {
-      if ((transform.position - _target.position).sqrMagnitude <= 1)
-      {
-         _target.transform.GetComponent<Creature>().TryGetDamage(_stat, this);
-         CreateEffect();
-         CallDisableEvent();
-         return;
-      }
+    private void FixedUpdate()
+    {
+        MoveToTarget();
+    }
 
-      var pos = _target.transform.position - transform.position;
-      transform.rotation = Quaternion.LookRotation(pos);
-      transform.Translate(Vector3.forward * _missileSpeed * Time.fixedDeltaTime);
-   }
+    private void MoveToTarget()
+    {
+        if ((transform.position - _target.position).sqrMagnitude <= 1)
+        {
+            _target.transform.GetComponent<Creature>().TryGetDamage(_stat, this);
+            CreateEffect();
+            CallDisableEvent();
+            return;
+        }
 
-   public void Init(Transform target)
-   {
-      _target = target;
-      //Invoke("DisableObject", 1f);
-   }
+        var pos = _target.transform.position - transform.position;
+        transform.rotation = Quaternion.LookRotation(pos);
+        transform.Translate(Vector3.forward * _missileSpeed * Time.fixedDeltaTime);
+    }
 
-   private void CreateEffect()
-   {
-      GameObject effect = ObjectPoolManager.Instance.GetObject(PoolType.NormalAttackEffect);
-      effect.transform.position = this.transform.position;
-      effect.GetComponent<NormalAttackEffect>().DelayDisable();
-   }
+    public void Init(Transform target)
+    {
+        _target = target;
+        //Invoke("DisableObject", 1f);
+    }
+
+    private void CreateEffect()
+    {
+        GameObject effect = ObjectPoolManager.Instance.GetObject(_hitEffectPrefab);
+        effect.transform.position = this.transform.position;
+        effect.GetComponent<NormalAttackEffect>().DelayDisable();
+    }
 }

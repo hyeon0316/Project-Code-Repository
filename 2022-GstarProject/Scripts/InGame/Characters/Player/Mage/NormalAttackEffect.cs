@@ -3,16 +3,17 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class NormalAttackEffect : MonoBehaviour
+public class NormalAttackEffect : MonoBehaviour, IPoolable
 {
-  
-   public void DelayDisable()
+    public int InstanceId { get; set; }
+
+    public void DelayDisable()
    {
-      Invoke("DisableEffect", 1.5f);
+      Invoke(nameof(DisableEffect), 1.5f);
    }
    
    private void DisableEffect()
    {
-      ObjectPoolManager.Instance.ReturnObject(PoolType.NormalAttackEffect, this.gameObject);
+      ObjectPoolManager.Instance.ReturnObject(this.gameObject);
    }
 }

@@ -9,6 +9,8 @@ using Random = UnityEngine.Random;
 /// </summary>
 public class BulletRain : MonoBehaviour
 {
+    [SerializeField] private GameObject _bulletPrefab;
+
     [Header("미사일 기능 관련")]
     [SerializeField] private float _missileSpeed = 2; // 미사일 속도.
 
@@ -27,6 +29,7 @@ public class BulletRain : MonoBehaviour
     private void Awake()
     {
         _audioSource = GetComponent<AudioSource>();
+        ObjectPoolManager.Instance.Init(_bulletPrefab, 10);
     }
 
     public void CreateMissile(Transform target)
@@ -58,7 +61,7 @@ public class BulletRain : MonoBehaviour
                 if (target == null) //타겟이 죽을 경우 중단
                     break;
 
-                BulletRainMissile missile = ObjectPoolManager.Instance.GetObject(PoolType.BulletRainMissile).GetComponent<BulletRainMissile>();
+                BulletRainMissile missile = ObjectPoolManager.Instance.GetObject(_bulletPrefab).GetComponent<BulletRainMissile>();
                 missile.Init(this.transform, target, _missileSpeed, _distanceFromStart, _distanceFromEnd);
                 shotCount--;
             }

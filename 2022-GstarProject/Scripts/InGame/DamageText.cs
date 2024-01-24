@@ -6,9 +6,9 @@ using DG.Tweening;
 using TMPro;
 using UnityEngine;
 
-public class DamageText : MonoBehaviour
+public class DamageText : MonoBehaviour, IPoolable
 {
-    private TextMeshPro _text;
+    public int InstanceId { get; set; }
 
     public TextMeshPro Text => _text;
 
@@ -16,6 +16,7 @@ public class DamageText : MonoBehaviour
     [SerializeField] private float _disableTime;
 
     private Camera _camera;
+    private TextMeshPro _text;
 
     private Transform _startPos;
 
@@ -56,7 +57,7 @@ public class DamageText : MonoBehaviour
     }
     public void DisableText()
     {
-        ObjectPoolManager.Instance.ReturnObject(PoolType.DamageText, this.gameObject);
+        ObjectPoolManager.Instance.ReturnObject(this.gameObject);
     }
     
 }

@@ -4,8 +4,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
-public sealed class BulletRainMissile : SkillAttack
+public sealed class BulletRainMissile : SkillAttack, IPoolable
 {
+    public int InstanceId { get; set; }
+
+    [SerializeField] private GameObject _hitEffectPrefab;
     private Vector3[] _bezierPoints = new Vector3[4];
 
     private Transform _target;
@@ -14,6 +17,10 @@ public sealed class BulletRainMissile : SkillAttack
     private float _endTime = 0;
     private float _curTime = 0;
 
+    private void Awake()
+    {
+        ObjectPoolManager.Instance.Init(_hitEffectPrefab, 1);
+    }
     /// <summary>
     /// 미사일의 초기값 설정
     /// </summary>
@@ -68,7 +75,7 @@ public sealed class BulletRainMissile : SkillAttack
             {
                 _target.transform.GetComponent<Creature>().TryGetDamage(DataManager.Instance.Player.Stat, this);
                 CreateMissileEffect();
-                ObjectPoolManager.Instance.ReturnObject(PoolType.BulletRainMissile, this.gameObject);
+                ObjectPoolManager.Instance.ReturnObject(this.gameObject);
                 break;
             }
 
@@ -99,7 +106,7 @@ public sealed class BulletRainMissile : SkillAttack
 
     private void CreateMissileEffect()
     {
-        GameObject effect = ObjectPoolManager.Instance.GetObject(PoolType.BulletRainEffect);
+        GameObject effect = ObjectPoolManager.Instance.GetObject(_hitEffectPrefab);
         effect.transform.position = this.transform.position;
         effect.GetComponent<BulletRainEffect>().DelayDisable();
     }
