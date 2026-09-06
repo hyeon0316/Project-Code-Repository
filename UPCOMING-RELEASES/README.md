@@ -247,9 +247,6 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 `속도 내림차순 → 아군 우선 → 원래 인덱스 오름차순`으로 완전 순서를 만듦.
 https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/GamePlay/Dungeon/Battle/BattleController.cs#L344-L371
 
-`List.Sort`가 불안정 정렬이라 동점 시 순서를 보장하지 않으므로,
-원래 인덱스를 마지막 비교 기준으로 넣어 결정적(deterministic)으로 만듦.
-
 **5. 노드 타입별 진입 처리를 딕셔너리로 분기**
 
 던전 노드가 전투·상점·이야기·카드선택 등으로 늘어나는데, `switch`로 분기하면 타입 추가마다 수정해야 함.
