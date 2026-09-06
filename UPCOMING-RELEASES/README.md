@@ -511,6 +511,184 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/5fbf1012452506895e258c
 
 <br></br>
 
+### 대화 시스템
+
+대화가 쓰이는 상황이 둘인데 요구가 정반대임.
+
+| | NPC 대화 | 컷신 대사 |
+|---|---|---|
+| 진행 | 플레이어가 눌러서 넘김 | 시간축을 따라 자동 재생 |
+| 분기 | 선택지로 갈라짐 | 없음 (정해진 순서) |
+| 편집 | 그래프로 흐름을 봄 | 카메라·연출과 같은 타임라인에 배치 |
+
+하나로 합치면 어느 쪽도 편하지 않아, **진행 방식은 나누고 출력 부분만 공유**하는 구조로 만듦.
+
+```
+[NPC 대화]  xNode 그래프  ──┐
+                            ├─→ DialoguePanel (타이핑·스킵·완료 통지)
+[컷신 대사] Timeline 트랙 ──┘
+```
+
+#### xNode 기반 NPC 대화
+
+**1. 노드 타입별 실행을 딕셔너리로 분기**
+
+대사·선택지·상점 진입·종료가 각각 다른 처리인데, `switch`로 나누면 노드가 늘 때마다 수정해야 함.
+타입 → 실행기 딕셔너리로 두고, 각 실행기는 자기 노드만 처리함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/25a7084e2e26873a971eeaa60e0c5de805105021/UPCOMING-RELEASES/Scripts/GamePlay/Dialogue/NodeExecutor/DialogueNodeExecutorRegistry.cs#L1-L21
+
+`DialogueManager`는 현재 노드를 실행기에 넘기기만 하고 노드 종류를 모름.
+노드를 추가할 때 매니저를 건드리지 않음.
+
+**2. 선택지 포트를 런타임이 아닌 편집 시점에 연결**
+
+선택지는 개수가 대화마다 달라서 고정 출력 포트로 만들 수 없음.
+xNode의 동적 포트를 쓰되, **연결이 바뀌는 순간 어느 선택지에 연결됐는지 기록**함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/25a7084e2e26873a971eeaa60e0c5de805105021/UPCOMING-RELEASES/Scripts/Shared/SO/DialogueNode/OptionNode.cs#L29-L60
+
+```csharp
+public override void OnCreateConnection(NodePort from, NodePort to)
+{
+    base.OnCreateConnection(from, to);
+
+    foreach (var option in DialogueOptions)
+    {
+        if (from.fieldName == option.Option)
+        {
+            option.ConnectingNode = from.Connection.node as DialogueNode;
+            break;
+        }
+    }
+}
+```
+
+런타임에 포트를 역추적하지 않아도 되고, 그래프에서 선을 지우면 참조도 같이 끊김.
+
+**3. 선택지 편집 UI를 커스텀 노드 에디터로**
+
+동적 포트는 기본 인스펙터로 추가·삭제할 수 없어, 노드 에디터를 직접 그림.
+문구와 포트 이름을 입력해 버튼 하나로 포트와 데이터를 함께 생성함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/25a7084e2e26873a971eeaa60e0c5de805105021/UPCOMING-RELEASES/Scripts/Editor/DialogueOptionNodeDrawer.cs#L32-L60
+
+빈 값과 중복 포트 이름을 생성 전에 막음.
+포트 이름이 겹치면 `OnCreateConnection`에서 어느 선택지인지 구분할 수 없어 연결이 엉키기 때문.
+
+**4. 조건부 선택지를 외부에서 주입**
+
+퀘스트 진행도에 따라 나타나는 선택지가 있는데, 이걸 그래프에 넣으면
+퀘스트 상태를 대화 그래프가 알아야 함.
+
+그래프에는 고정 선택지만 두고, 상황에 따른 선택지는 **미리 등록해뒀다가 합쳐서 표시**함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/25a7084e2e26873a971eeaa60e0c5de805105021/UPCOMING-RELEASES/Scripts/GamePlay/Dialogue/NodeExecutor/OptionNodeExecutor.cs#L1-L26
+
+```csharp
+var combinedOptions = DialogueManager.Instance.ConsumeDynamicOptions()
+    .Concat(staticOptions)
+    .ToList();
+```
+
+`Consume`라는 이름대로 꺼내면서 비우므로, 다음 대화에 이전 선택지가 남지 않음.
+동적 선택지는 연결 노드가 아니라 콜백을 들고 있어서, 그래프 밖의 동작(퀘스트 수락 등)을 실행함.
+
+#### Timeline 기반 컷신 대사
+
+**1. 대사를 클립으로 만들어 연출과 같은 축에 배치**
+
+컷신은 카메라·애니메이션이 이미 타임라인에 있음.
+대사만 별도 시스템으로 재생하면 타이밍을 코드로 맞춰야 하므로, 대사도 트랙으로 만듦.
+
+말풍선용과 나레이션용 트랙을 나눔.
+말풍선 트랙은 `TrackBindingType(typeof(Renderer))`로 **대상 오브젝트를 바인딩**받아,
+그 위치에 풍선을 띄우므로 좌표를 클립마다 입력하지 않아도 됨.
+
+```csharp
+[TrackColor(0.4f, 0.7f, 1f)]
+[TrackClipType(typeof(BubbleDialogueClip))]
+[TrackBindingType(typeof(Renderer))]
+public class BubbleDialogueTrack : TrackAsset { }
+```
+
+**2. 타이핑 중 타임라인을 멈춤**
+
+대사 길이는 문구·타이핑 속도·번역에 따라 달라짐. 클립 길이를 그 시간에 맞춰두면
+문구를 고칠 때마다 클립을 다시 재야 하고, 언어마다 어긋남.
+
+클립이 시작되면 **재생을 멈추고, 타이핑이 끝난 뒤 다시 재생**함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/25a7084e2e26873a971eeaa60e0c5de805105021/UPCOMING-RELEASES/Scripts/GamePlay/Dialogue/Track/BubbleDialogue/BubbleDialogueBehaviour.cs#L23-L41
+
+```csharp
+m_IsPlayed = true;
+m_Director.Pause();
+
+DialogueManager.Instance.PlayBubbleLine(LocalizeKey, TypingSpeed, worldPos, Direction, () =>
+{
+    m_Director.Play();
+});
+```
+
+클립 길이는 최소값이면 되고, 실제 지속 시간은 대사가 결정함.
+`ProcessFrame`은 매 프레임 호출되므로 `m_IsPlayed`로 한 번만 실행되게 막음.
+`Application.isPlaying` 검사는 에디터에서 타임라인을 스크럽할 때 대사가 재생되는 것을 막기 위함.
+
+**3. 스킵을 마커 단위로**
+
+컷신 전체 스킵만 있으면 앞부분을 이미 본 유저가 뒷부분까지 건너뛰게 됨.
+타임라인에 `SkipMarker`를 찍어두고, **다음 마커까지만** 이동함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/25a7084e2e26873a971eeaa60e0c5de805105021/UPCOMING-RELEASES/Scripts/GamePlay/Dialogue/Track/SkipControl/SkipControlBehaviour.cs#L75-L117
+
+현재 시간보다 뒤에 있는 마커 중 가장 가까운 것을 찾아 그 지점으로 점프함.
+남은 마커가 없으면 스킵 버튼을 숨겨, 누를 수 있는데 아무 일도 없는 상태를 만들지 않음.
+
+점프는 `Stop → time 설정 → Evaluate → Play` 순서로 함.
+`Evaluate`를 부르지 않으면 건너뛴 구간의 트랙 상태(오브젝트 위치·활성 여부)가 반영되지 않아
+장면이 어긋난 채로 재생됨. 이동 직후 1초간 로딩을 덮어 그 전환을 가림.
+
+**4. 마커가 없는 컷신은 스킵 버튼을 띄우지 않음**
+
+`ProcessFrame` 첫 진입에 마커 존재 여부를 한 번만 검사하고, 없으면 이후 처리를 전부 건너뜀.
+https://github.com/hyeon0316/Project-Code-Repository/blob/25a7084e2e26873a971eeaa60e0c5de805105021/UPCOMING-RELEASES/Scripts/GamePlay/Dialogue/Track/SkipControl/SkipControlBehaviour.cs#L22-L47
+
+매 프레임 모든 트랙의 마커를 순회하는 비용을 없애고,
+`OnPlayableDestroy`에서 등록을 해제해 컷신이 끝난 뒤 스킵 버튼이 남지 않게 함.
+
+#### 두 시스템이 공유하는 부분
+
+**출력 패널과 타이핑 처리**
+
+`DialoguePanel`이 타이핑·스킵·완료 통지를 담당하고, 양쪽이 이를 그대로 씀.
+타이핑은 `CancellationToken`으로 중단하고, 취소되면 전체 문장을 즉시 출력함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/25a7084e2e26873a971eeaa60e0c5de805105021/UPCOMING-RELEASES/Scripts/GamePlay/Dialogue/DialoguePanel.cs#L41-L75
+
+한 번 누르면 타이핑을 끝내고, 다시 누르면 다음으로 넘어가는 동작이
+`IsTyping` 하나로 갈리므로 입력 처리에 상태 플래그를 더 두지 않아도 됨.
+
+```csharp
+if (!m_DialogueUI.IsTyping)
+{
+    // 다음 노드 실행
+}
+else
+{
+    m_DialogueUI.SkipTyping();
+}
+```
+
+**스킵 버튼 하나를 상황에 따라 다시 연결**
+
+NPC 대화에서는 대화 종료, 컷신에서는 마커 점프로 동작이 달라짐.
+버튼을 두 개 두지 않고 **핸들러를 교체**하는 방식으로 씀.
+https://github.com/hyeon0316/Project-Code-Repository/blob/25a7084e2e26873a971eeaa60e0c5de805105021/UPCOMING-RELEASES/Scripts/GamePlay/Dialogue/DialogueManager.cs#L36-L43
+
+교체 시 이전 핸들러를 반드시 해제하므로, 대화를 여러 번 오갈 때 콜백이 중복 등록되지 않음.
+
+**문구는 키로만 들고 있음**
+
+노드와 클립 모두 문장이 아니라 로컬라이즈 키를 저장함.
+출력 직전에 키를 문구로 바꾸고, `TextTokenResolver`로 플레이어 이름 같은 치환자를 처리함.
+번역을 추가해도 그래프나 타임라인 에셋을 건드리지 않음.
+
+<br></br>
+
 ### 데이터 테이블 파이프라인
 
 기획 수치가 코드에 있으면 밸런스 수정마다 빌드가 필요함.
