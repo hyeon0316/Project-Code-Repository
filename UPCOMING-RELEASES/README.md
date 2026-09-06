@@ -311,8 +311,19 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/e1312b37df6e0698b63b40
 **버튼 구성을 타입으로 강제**
 
 `CommonMessagePopupPararm`이 `GetOption()`을 추상으로 선언해, 파생 클래스가 버튼 구성을 반드시 밝히게 함.
-팝업은 그 값으로 `UIMultiView`의 레이아웃을 골라 확인형/선택형을 같은 프리팹에서 전환함.
 https://github.com/hyeon0316/Project-Code-Repository/blob/e1312b37df6e0698b63b40bb86a51b90e780ce1b/UPCOMING-RELEASES/Scripts/FrameWork/UI/Popup/PopupParam.cs#L30-L82
+
+팝업은 그 값을 그대로 `UIMultiView`의 View 이름으로 써서 확인형/선택형 레이아웃을 전환함.
+앞서 만든 레이아웃 전환 기능을 그대로 재사용하므로, 버튼 배치가 다른 팝업에 프리팹을 더 만들지 않아도 됨.
+
+```csharp
+if (!m_UIMultiView.SetSelectView(m_Param.GetOption().ToString()))
+{
+    Debug.LogError("Not loaded view name");
+}
+m_TitleText.text = m_Param.GetTitle();
+m_GuideText.text = m_Param.GetMessage();
+```
 
 예/아니오 팝업에는 확인 버튼이 없어야 하므로, `YesNoPopupPararm`이 `OK()`를 `sealed override`로 막아
 파생에서 되살릴 수 없게 함. 쓰지 않는 콜백이 연결되는 실수를 타입 단계에서 차단함.
