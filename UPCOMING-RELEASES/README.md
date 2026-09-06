@@ -293,6 +293,104 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 `UIManager`에 인스펙터로 경로와 쿼리를 넣고 바로 진입하는 테스트 버튼을 둬서,
 특정 화면을 확인할 때 타이틀부터 거치지 않아도 됨 (에디터 전용).
 
+**4. 확인 팝업을 한 줄로 띄우게 함**
+
+"재화가 부족합니다", "정말 나가시겠습니까" 같은 팝업이 수십 곳에서 필요함.
+매번 프리팹을 만들면 문구만 다른 프리팹이 쌓이고, 버튼 개수·콜백 연결을 화면마다 다시 함.
+
+프리팹은 하나로 두고 **표시할 내용과 눌렀을 때 할 일을 파라미터 객체가 들고 오게 함.**
+팝업은 파라미터를 받아 그리기만 하므로, 호출부가 팝업 내부를 몰라도 됨.
+
+```csharp
+// 호출부 — 프리팹·버튼·콜백 연결을 신경쓰지 않음
+SystemPopupTemplate.ShowYesNoPopup(title, msg, onYes: () => LeaveDungeon());
+SystemPopupTemplate.ShowOKPopup(title, Localize.Get("COMMON_CURRENCY_SHORTAGE"));
+```
+https://github.com/hyeon0316/Project-Code-Repository/blob/e1312b37df6e0698b63b40bb86a51b90e780ce1b/UPCOMING-RELEASES/Scripts/FrameWork/SystemPopupTemplate.cs#L34-L52
+
+**버튼 구성을 타입으로 강제**
+
+`CommonMessagePopupPararm`이 `GetOption()`을 추상으로 선언해, 파생 클래스가 버튼 구성을 반드시 밝히게 함.
+팝업은 그 값으로 `UIMultiView`의 레이아웃을 골라 확인형/선택형을 같은 프리팹에서 전환함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/e1312b37df6e0698b63b40bb86a51b90e780ce1b/UPCOMING-RELEASES/Scripts/FrameWork/UI/Popup/PopupParam.cs#L30-L82
+
+예/아니오 팝업에는 확인 버튼이 없어야 하므로, `YesNoPopupPararm`이 `OK()`를 `sealed override`로 막아
+파생에서 되살릴 수 없게 함. 쓰지 않는 콜백이 연결되는 실수를 타입 단계에서 차단함.
+
+```csharp
+public sealed override void OK()
+{ }
+```
+
+**새 팝업은 파라미터 클래스만 추가**
+
+문구만 다른 팝업은 위 템플릿을 쓰고, 전용 UI가 필요하면 `BasePopupParam`을 상속해 필요한 데이터만 더함
+(`ReportPopupParam`, `UserProfilePopupParam` 등). 팝업 생성·큐 처리는 그대로 재사용됨.
+
+**5. 데이터와 UI의 책임을 분리**
+
+UI가 데이터를 직접 들고 있으면 같은 값을 여러 화면이 각자 갱신하게 되고,
+화면이 닫힌 동안 값이 바뀌면 다시 열었을 때 어긋남.
+반대로 로직이 UI를 참조하면 UI가 없는 상태(씬 전환 중, 화면 미생성)에서 예외가 남.
+
+**데이터는 Contents, 표시는 Page**로 나누고 둘을 이벤트로만 잇는 구조를 씀.
+
+```
+[Contents — 데이터·로직, MonoBehaviour 아님]
+  IManagableContents          : Initialize / OnUpdate / UnInitialize
+  GlobalEvent<T>.IManagableHandler : Register / UnRegister / Send
+        │
+        │  Send(param)  ← 값이 바뀐 쪽이 알림만 보냄
+        ↓
+[Page — 표시 전용, MonoBehaviour]
+  PageBehaviour               : 화면 생명주기
+  GlobalEvent<T>.IEventHandler: OnEvent(param) → 다시 그림
+```
+
+`ContentsManager`가 모든 Contents를 타입으로 보관하고 `OnUpdate`를 돌림.
+Contents는 MonoBehaviour가 아니라서 씬·화면과 수명이 분리되고, 화면이 닫혀도 데이터가 유지됨.
+https://github.com/hyeon0316/Project-Code-Repository/blob/e1312b37df6e0698b63b40bb86a51b90e780ce1b/UPCOMING-RELEASES/Scripts/FrameWork/Manager/ContentsManager.cs#L10-L51
+
+**등록·해제를 화면 생명주기에 맞춤**
+
+Page가 `OnCreate`에서 구독하고 `OnFinish`에서 해제함.
+`OnEnable`/`OnDisable`이 아니라 생성·소멸 시점에 거는 이유는,
+다른 화면에 가려져 비활성인 동안에도 데이터 변경을 받아둬야 다시 돌아왔을 때 최신 상태이기 때문.
+https://github.com/hyeon0316/Project-Code-Repository/blob/e1312b37df6e0698b63b40bb86a51b90e780ce1b/UPCOMING-RELEASES/Scripts/GamePlay/Achievement/Pages_Achievement.cs#L21-L48
+
+```csharp
+public class Pages_Achievement : PageBehaviour, GlobalEvent<AchievementContentsParam>.IEventHandler
+{
+    public override UniTask OnCreate()
+    {
+        m_Contents = ContentsManager.Instance.Get<AchievementContents>();
+        m_Contents.RegisterHandler(this);
+        // ...
+    }
+
+    public override UniTask OnFinish()
+    {
+        m_Contents.UnRegisterHandler(this);
+        // ...
+    }
+
+    public void OnEvent(AchievementContentsParam parameter)
+    {
+        RefreshList();   // 무엇이 바뀌었는지 캐지 않고 다시 그림
+    }
+}
+```
+
+**UI는 요청만 보내고 상태를 직접 고치지 않음**
+
+버튼을 눌러도 UI가 보상 지급이나 목록 데이터를 직접 건드리지 않음.
+`m_Contents.ClaimReward(mission)`으로 요청만 보내고, 판정·차감·저장은 Contents가 함.
+UI가 하는 일은 Contents가 들고 있는 값을 다시 읽어 그리는 것뿐이라, 화면과 데이터가 어긋날 수 없음.
+
+Contents는 처리가 끝나면 `Send`로 알리므로, **그 데이터를 보는 다른 화면도 같은 시점에 갱신됨.**
+업적 보상을 받으면 재화 표시가 있는 상단 HUD가 함께 반응하는 식으로,
+값이 바뀐 쪽이 누가 보고 있는지 몰라도 됨.
+
 <br></br>
 
 ### 튜토리얼
