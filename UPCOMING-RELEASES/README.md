@@ -369,17 +369,14 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 CDN 실패·로컬 테이블 누락은 전부 `throw`함.
 데이터 없이 진행하면 이후에 엉뚱한 지점에서 `NullReference`가 나서 원인 추적이 어려워짐.
 
-- 개선점
-
-| 항목 | 문제 | 개선 방향 |
-|---|---|---|
-| `BDatabase`가 static 전역 | 테이블 35종이 전부 public static 필드라 접근 제어가 없음 | 조회 API만 노출하고 필드는 private |
-| 파서 등록이 수동 | 테이블 추가 시 `JsonDispatcher`에 직접 추가해야 하고 빠뜨려도 경고만 남음 | 속성(Attribute) 기반 자동 등록 |
-| 테이블 검증 없음 | 참조 무결성(존재하지 않는 EffectID 등)을 런타임에야 발견 | 에디터에서 사전 검사 |
-
 <br></br>
 
-### 에디터 툴 - 던전 맵 편집기
+### 에디터 툴
+
+작업 결과를 눈으로 확인할 수 없으면 실수가 늘어남.
+숫자와 리스트로 편집하던 두 가지를 시각 편집 도구로 만듦.
+
+#### 던전 맵 편집기
 
 던전 맵이 노드 그래프(전투 → 분기 → 상점 → 보스) 구조인데,
 인스펙터에서 노드와 연결을 리스트로 편집하면 형태를 볼 수 없어 실수가 잦았음.
@@ -405,24 +402,89 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 `SetPosition` 오버라이드로 드래그한 좌표를 SO에 바로 기록함.
 창을 닫았다 열어도 배치가 유지되고, 런타임 맵 UI가 같은 좌표를 그대로 사용함.
 
-**4. 커스텀 프로퍼티 드로어**
+#### 레이아웃 편집 인스펙터 (UIMultiViewInspector)
 
-인스펙터에서 반복되던 작업을 드로어로 처리함.
+`UIMultiView`는 자식들의 배치를 View 이름별로 들고 있는데,
+기본 인스펙터로 편집하면 리스트 안의 좌표 숫자를 직접 고쳐야 해서 결과를 볼 수 없음.
 
-| 드로어 | 역할 |
-|---|---|
-| `ButtonDrawer` | 메서드에 `[Button]`만 붙이면 인스펙터에 실행 버튼 생성 |
-| `TagSelectorVariableDrawer` | 태그 문자열을 직접 입력하지 않고 드롭다운으로 선택 |
-| `SingleEnumDrawer` | 플래그 enum에서 하나만 고르도록 제한 |
-| `UIMultiViewInspector` | 레이아웃 View 추가·전환·자동 저장 |
+씬에서 **눈으로 보면서 옮긴 배치가 그대로 저장되는** 인스펙터를 만듦.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Editor/UIMultiViewInspector.cs#L1-L144
 
-- 개선점
+**1. 저장 버튼을 누르지 않아도 반영되게 함**
 
-| 항목 | 문제 | 개선 방향 |
-|---|---|---|
-| 에셋 경로 하드코딩 | `Assets/SO/Dungeon/Map/` 고정이라 폴더 구조 변경 시 깨짐 | 설정 SO로 분리 |
-| Undo 미지원 | 노드 삭제·이동에 `Undo` 등록이 없어 Ctrl+Z가 동작하지 않음 | `Undo.RecordObject` 적용 |
-| 그래프 유효성 검사 없음 | 연결되지 않은 노드나 도달 불가 경로를 저장할 수 있음 | 저장 시 도달성 검사 |
+`OnEnable` / `OnDisable`에서 현재 배치를 저장함.
+다른 오브젝트를 선택하는 순간 인스펙터가 닫히면서 저장되므로,
+씬에서 위치를 옮기고 저장을 잊는 경우가 없어짐.
+
+```csharp
+public void OnDisable()
+{
+    UIMultiView multiView = target as UIMultiView;
+    bool canSave = multiView.Save();
+    if (canSave)
+    {
+        EditorUtility.SetDirty(multiView);
+    }
+}
+```
+
+`Save()`의 반환값을 확인해 성공했을 때만 `SetDirty`를 호출함.
+비활성 오브젝트는 자식 배치를 읽을 수 없어 `Save()`가 `false`를 반환하는데,
+이때 `SetDirty`까지 부르면 **빈 배치가 저장된 것으로 표시되어 기존 데이터가 날아감**.
+
+**2. View 전환 시 두 번 저장**
+
+전환에서 가장 까다로웠던 부분. 이전 View의 편집 내용을 지키면서 새 View를 불러와야 함.
+
+```csharp
+int newSelectIndex = EditorGUILayout.Popup(prevSelectIndex, keyNames);
+if (prevSelectIndex != newSelectIndex)
+{
+    //원래 자리 복원해주기
+    multiView.Save();                        // ① 이전 View 편집분 보존
+
+    multiView.SetSelectView(keyNames[newSelectIndex]);  // ② 새 View 적용
+    multiView.Save();                        // ③ 새 View 기준으로 다시 기록
+
+    EditorUtility.SetDirty(multiView);
+}
+```
+
+①을 빠뜨리면 방금 옮긴 배치가 전환과 동시에 사라짐.
+③이 필요한 이유는 `SetSelectView`가 자식들의 실제 Transform을 새 View 값으로 덮어쓰기 때문.
+이 시점의 씬 상태가 곧 새 View의 내용이므로, 다시 저장해 둘을 일치시킴.
+
+**3. 인스펙터에서 수정하면 씬에 즉시 반영**
+
+위치·크기·활성 상태를 필드로 그리고, 값을 받은 직후 `Apply()`를 호출함.
+입력하는 동안 씬 뷰가 실시간으로 따라오므로 숫자를 감으로 맞추지 않아도 됨.
+
+```csharp
+widget.AnchoredPosition = EditorGUILayout.Vector2Field("Position", widget.AnchoredPosition);
+widget.SizeDelta = EditorGUILayout.Vector2Field("Size", widget.SizeDelta);
+widget.Active = EditorGUILayout.Toggle("Active", widget.Active);
+widget.Apply();
+```
+
+각 자식은 `GUILayout.BeginVertical(widget.Object.name, guiStyle)`로 오브젝트 이름을 단 박스에 묶어,
+자식이 많아도 어느 것을 편집 중인지 구분됨.
+
+**4. 삭제된 자식과 사라진 View 처리**
+
+`OnInspectorGUI` 진입 시 `RemoveDeletedChildrens()`를 먼저 호출해 파괴된 오브젝트 참조를 정리함.
+GUI를 그리는 도중에 null을 만나면 인스펙터 전체가 예외로 멈추기 때문에, 그리기 전에 걸러냄.
+
+선택 중이던 View가 목록에 없으면(다른 사람이 지웠거나 이름이 바뀐 경우) 첫 번째 View로 되돌림.
+
+```csharp
+if (!isContains)
+{
+    multiView.SetSelectView(keyNames[0]);
+}
+```
+
+View 추가는 중복 키를 막고, 실패 사유를 다이얼로그로 알림
+(빈 이름 / 이미 존재하는 키를 구분해서 표시).
 
 <br></br>
 
@@ -519,25 +581,3 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 
 Unity 오브젝트는 `== null` 오버로딩 때문에 일반 null 검사로 파괴 여부를 알 수 없어,
 `is Object unityObj && unityObj == null` 로 따로 확인함.
-
-- 개선점
-
-| 항목 | 문제 | 개선 방향 |
-|---|---|---|
-| 한 프레임에 1건만 처리 | `OnUpdate`가 `Dequeue`를 한 번만 해서, 이벤트가 몰리면 반영이 늦어짐 | 프레임당 큐를 비우도록 반복 |
-| 파괴 핸들러를 에러 로그로 | 정상적인 씬 전환에서도 로그가 찍혀 실제 오류와 섞임 | 경고로 낮추거나 해제 규약 강제 |
-| 핸들러 목록이 List | 등록·해제가 잦으면 선형 탐색 | 소량이라 현재는 문제없음, 필요 시 HashSet |
-
-<br></br>
-
-## 남은 작업
-
-개발 진행 중이라 아직 정리되지 않은 부분.
-
-| 영역 | 현재 상태 |
-|---|---|
-| 던전 진행 저장 | 로컬(PlayerPrefs) 저장 → 서버 이전 필요 |
-| iOS | 빌드 파이프라인 미구성 |
-| 전투 밸런스 | 수치 테이블만 구성, 조정 미완 |
-| 튜토리얼 | 기본 흐름만 동작 |
-| 사운드 | 효과음 일부만 적용 |
