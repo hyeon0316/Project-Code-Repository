@@ -295,6 +295,122 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 
 <br></br>
 
+### 튜토리얼
+
+특정 UI를 강조하고 그것만 누를 수 있게 막는 형태.
+튜토리얼이 UI를 직접 참조하면 화면이 바뀔 때마다 튜토리얼 코드를 고쳐야 하고,
+아직 생성되지 않은 UI를 가리키면 예외가 남.
+
+**1. 대상을 직접 참조하지 않고 앵커 ID로 지목**
+
+강조할 UI에 `TutorialAnchor`를 붙이고 ID를 부여함.
+튜토리얼 데이터는 ID만 들고 있어서, 대상 UI의 위치·계층이 바뀌어도 튜토리얼은 그대로 동작함.
+
+앵커는 `OnEnable`에서 자신을 정적 레지스트리에 등록하고 `OnDisable`에서 제거함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/5fbf1012452506895e258c432aa244cff8b6437a/UPCOMING-RELEASES/Scripts/GamePlay/Tutorial/TutorialAnchor.cs#L18-L37
+
+용도에 따라 둘로 나눔.
+
+| 클래스 | 역할 |
+|---|---|
+| `TutorialAnchor` | 대기 신호만 보냄. 화면 루트처럼 강조·클릭이 필요 없는 대상 |
+| `TutorialClickAnchor` | rect 좌표까지 등록하고 클릭 이벤트 발행. 강조 + 클릭 진행이 필요한 대상 |
+
+클릭이 필요 없는 앵커까지 `RectTransform`과 `IPointerClickHandler`를 갖게 하면
+쓰지 않는 요구사항이 붙으므로, 상속으로 필요한 쪽만 확장함.
+
+**2. 대상이 아직 없으면 등록될 때까지 대기**
+
+가장 문제가 됐던 부분. 화면 전환 직후 튜토리얼이 시작되면 대상 UI가 아직 생성되지 않음.
+"몇 프레임 기다린다" 같은 처리는 기기 성능에 따라 깨짐.
+
+앵커가 등록되어 있으면 바로 진행하고, 없으면 **등록 이벤트를 구독하고 멈춤**.
+https://github.com/hyeon0316/Project-Code-Repository/blob/5fbf1012452506895e258c432aa244cff8b6437a/UPCOMING-RELEASES/Scripts/GamePlay/Tutorial/TutorialContents.cs#L184-L204
+
+기다리던 앵커가 등록되는 순간 구독을 해제하고 이어감.
+대기 시간이 아니라 실제 등록 시점을 기준으로 하므로, 로딩이 느린 기기에서도 순서가 어긋나지 않음.
+
+**3. 진행 조건을 스텝 데이터가 결정**
+
+스텝마다 강조 여부·설명 페이지·클릭 영역을 `TutorialStep`에 두어, 연출 조합을 데이터로 바꿈.
+
+```csharp
+public class TutorialStep
+{
+    public bool UseHoleMesh;          // 대상 강조 + 그 부분만 클릭 통과
+    public ETutorialAnchorID AnchorID;
+    public bool UseCenterPage;        // 중앙 설명 패널
+    public string[] Pages;            // 여러 장이면 순서대로
+    public bool UseCornerText;
+    public bool UseAdvanceArea;       // 아무 곳이나 눌러 넘기기
+}
+```
+
+`UseHoleMesh`(대상을 눌러야 진행)와 `UseCenterPage`(설명을 읽고 넘김)는 진행 방식이 충돌하므로,
+`OnValidate`에서 동시 활성화를 에디터 단계에서 잡아냄.
+
+```csharp
+if (UseHoleMesh && UseCenterPage)
+    Debug.LogError("[TutorialStep] UseHoleMesh와 UseCenterPage를 동시에 활성화할 수 없습니다.");
+```
+
+페이지가 여러 장인 스텝은 `AdvancePage()`가 페이지를 넘기다가, 마지막에서 다음 스텝으로 넘어감.
+https://github.com/hyeon0316/Project-Code-Repository/blob/5fbf1012452506895e258c432aa244cff8b6437a/UPCOMING-RELEASES/Scripts/GamePlay/Tutorial/TutorialContents.cs#L154-L182
+
+**4. 강조 구멍을 메시로 직접 생성**
+
+화면을 어둡게 덮되 대상만 뚫려 보여야 함.
+이미지 마스크로 하면 대상 크기마다 이미지가 필요하므로, 링 형태 메시를 코드로 생성함.
+
+구멍 둘레를 48등분해 안쪽 원과 바깥 사각형 사이를 삼각형으로 채움.
+안쪽에는 정점을 두지 않으므로 그 부분이 그려지지 않아 구멍이 됨.
+https://github.com/hyeon0316/Project-Code-Repository/blob/5fbf1012452506895e258c432aa244cff8b6437a/UPCOMING-RELEASES/Scripts/GamePlay/Tutorial/TutorialHoleMesh.cs#L85-L117
+
+구멍 위치·크기는 앵커의 `GetWorldCorners`로 계산하므로, 대상 크기가 달라도 자동으로 맞음.
+스텝이 바뀔 때는 `Tween.Custom`으로 이전 구멍에서 새 위치로 이동시켜, 끊기지 않고 이어짐
+(첫 스텝만 즉시 배치 — 이전 위치가 없어 화면 중앙에서 날아오는 것처럼 보이므로).
+
+**5. 클릭 통과 판정을 원이 아닌 rect로**
+
+구멍은 원인데 버튼은 사각형이라, 원 기준으로 판정하면 버튼 모서리가 눌리지 않음.
+`ICanvasRaycastFilter`를 구현해 **강조는 원, 클릭 판정은 대상 rect**로 분리함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/5fbf1012452506895e258c432aa244cff8b6437a/UPCOMING-RELEASES/Scripts/GamePlay/Tutorial/TutorialHoleMesh.cs#L52-L63
+
+`IsRaycastLocationValid`가 rect 안이면 `false`를 반환해 오버레이가 클릭을 받지 않고,
+그 아래 실제 버튼으로 입력이 내려감. 나머지 영역은 오버레이가 전부 막음.
+
+**6. 시작 조건을 게임 이벤트에 연결**
+
+튜토리얼 시작을 각 기능 코드에서 호출하면, 기능마다 튜토리얼을 아는 코드가 박힘.
+게임 이벤트(던전 입장, NPC 대화 등)를 구독해 조건이 맞는 튜토리얼을 찾아 실행함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/5fbf1012452506895e258c432aa244cff8b6437a/UPCOMING-RELEASES/Scripts/GamePlay/Tutorial/TutorialContents.cs#L64-L71
+
+`TutorialSO`에 트리거 타입과 파라미터를 두어, 시작 조건 변경이 에셋 수정으로 끝남.
+기능 쪽은 `GameEventReporter.Report()`만 부르고 튜토리얼의 존재를 모름.
+
+**7. 본 튜토리얼은 서버에 기록**
+
+이미 본 튜토리얼을 다시 띄우면 안 되고, 기기를 바꿔도 유지돼야 함.
+본 목록을 `HashSet`으로 들고 있다가 저장 시점에 클라우드로 보냄.
+https://github.com/hyeon0316/Project-Code-Repository/blob/5fbf1012452506895e258c432aa244cff8b6437a/UPCOMING-RELEASES/Scripts/GamePlay/Tutorial/TutorialContents.cs#L230-L246
+
+매번 저장하지 않고 `m_IsDataChanged`가 켜졌을 때만 보냄.
+저장 시점은 주기적 저장·앱 종료·백그라운드 전환 세 곳에 걸어, 강제 종료에도 기록이 남게 함.
+
+`ETutorialID`는 int로 직렬화되므로 **enum 순서를 바꾸면 기존 유저의 기록이 어긋남**.
+주석으로 명시해두고 새 항목은 뒤에만 추가함.
+
+- 개선점
+
+| 항목 | 문제 | 개선 방향 |
+|---|---|---|
+| 저장 실패 처리 | `Save()`에서 실패 시 `m_IsDataChanged = true`로 되돌린 직후 `false`로 덮어써서 재시도가 안 됨 | 분기 정리 필요 (확인된 버그) |
+| 앵커 레지스트리가 static | 씬 전환 시 해제가 누락되면 등록 정보가 남을 수 있음 | 씬 언로드 시점에 일괄 정리 |
+| 스텝 되돌리기 없음 | 중간에 앱이 꺼지면 튜토리얼을 처음부터 다시 봐야 함 | 진행 중인 스텝 인덱스도 저장 |
+| 구멍이 원 고정 | 가로로 긴 버튼은 여백이 크게 남음 | rect 비율에 맞춘 타원 또는 둥근 사각형 |
+
+<br></br>
+
 ### 데이터 테이블 파이프라인
 
 기획 수치가 코드에 있으면 밸런스 수정마다 빌드가 필요함.
