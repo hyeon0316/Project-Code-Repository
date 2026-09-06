@@ -293,18 +293,6 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 `UIManager`에 인스펙터로 경로와 쿼리를 넣고 바로 진입하는 테스트 버튼을 둬서,
 특정 화면을 확인할 때 타이틀부터 거치지 않아도 됨 (에디터 전용).
 
-**4. 한 오브젝트가 여러 레이아웃을 갖게 함**
-
-같은 UI가 상황에 따라 배치만 다른 경우(탭 전환 등)에 프리팹을 나누면 수정이 두 배가 됨.
-자식들의 위치·크기·활성 상태를 이름표(View)별로 저장해두고 전환 시 적용함.
-https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Core/Utilities/UIMultiView.cs#L41-L83
-
-저장은 커스텀 인스펙터가 담당함. 인스펙터가 열리고 닫히는 시점에 현재 배치를 자동 저장하므로,
-디자이너가 씬에서 옮긴 결과가 따로 저장 버튼을 누르지 않아도 반영됨.
-https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Editor/UIMultiViewInspector.cs#L11-L29
-
-삭제된 자식은 `RemoveDeletedChildrens()`로 정리해 null 참조가 남지 않게 함.
-
 <br></br>
 
 ### 데이터 테이블 파이프라인
