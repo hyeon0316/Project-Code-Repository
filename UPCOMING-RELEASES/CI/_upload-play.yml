@@ -1,0 +1,34 @@
+name: Upload to Play Store
+
+on:
+  workflow_call: {}
+
+jobs:
+  upload-play:
+    name: Upload to Play Console (internal)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download AAB artifact
+        uses: actions/download-artifact@v4.3.0
+        with:
+          name: android-aab
+          path: aab
+
+      - name: Upload to Play Console
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.HyeonStudio.GooglePlay_UpcomingReleases
+          releaseFiles: "**/*.aab"
+          track: internal
+          status: completed
+          inAppUpdatePriority: 2
+
+      - name: Discord notify
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          if [ "$STATUS" = "success" ]; then LABEL="✅ 성공"; COLOR=3066993; else LABEL="❌ 실패"; COLOR=15158332; fi
+          curl -s -X POST "${{ secrets.DISCORD_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"embeds\":[{\"title\":\"$LABEL | Play Console 업로드\",\"color\":$COLOR,\"url\":\"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}]}"

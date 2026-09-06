@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (skip S3/Play deploy, build only)'
+        type: boolean
+        default: true
+      skip_addressables:
+        description: 'Skip Addressables build + upload'
+        type: boolean
+        default: false
+      skip_aab:
+        description: 'Skip AAB build'
+        type: boolean
+        default: false
+      skip_play_upload:
+        description: 'Skip Play Console upload'
+        type: boolean
+        default: false
+      version_bump:
+        description: 'bundleVersion bump type'
+        type: choice
+        options: [patch, minor, major, none]
+        default: patch
+      vcode_bump:
+        description: 'Bump AndroidBundleVersionCode (+1)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-addressables:
+    if: ${{ !inputs.skip_addressables }}
+    uses: ./.github/workflows/_build-addressables.yml
+    with:
+      dry_run: ${{ inputs.dry_run }}
+    secrets: inherit
+
+  build-aab:
+    if: ${{ !cancelled() && !inputs.skip_aab && (needs.build-addressables.result == 'success' || needs.build-addressables.result == 'skipped') }}
+    needs: build-addressables
+    uses: ./.github/workflows/_build-aab.yml
+    with:
+      dry_run: ${{ inputs.dry_run }}
+      version_bump: ${{ inputs.version_bump }}
+      vcode_bump: ${{ inputs.vcode_bump }}
+    secrets: inherit
+
+  upload-play:
+    if: ${{ !cancelled() && !inputs.skip_play_upload && !inputs.dry_run && needs.build-aab.result == 'success' }}
+    needs: build-aab
+    uses: ./.github/workflows/_upload-play.yml
+    secrets: inherit

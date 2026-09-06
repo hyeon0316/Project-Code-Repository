@@ -1,0 +1,135 @@
+name: Build Addressables
+
+on:
+  workflow_call:
+    inputs:
+      dry_run:
+        type: boolean
+        required: true
+
+env:
+  UNITY_EXE: 'C:\Program Files\Unity\Hub\Editor\2022.3.47f1\Editor\Unity.exe'
+
+jobs:
+  build-addressables:
+    name: Build Addressables & Upload to S3
+    runs-on: [self-hosted, windows]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+        with:
+          lfs: true
+          clean: false
+
+      - name: Backdate Editor scripts to prevent recompile
+        shell: powershell
+        run: |
+          $dllPath = "${{ github.workspace }}\Library\ScriptAssemblies\ScriptsEditor.dll"
+          if (Test-Path $dllPath) {
+            $dllTime = (Get-Item $dllPath).LastWriteTime.AddSeconds(-10)
+            Get-ChildItem "${{ github.workspace }}\Assets\Scripts\Editor" -Filter "*.cs" | ForEach-Object {
+              $_.LastWriteTime = $dllTime
+            }
+            Write-Host "Backdated Editor .cs files to $dllTime"
+          } else {
+            Write-Host "ScriptsEditor.dll not found, skipping backdate"
+          }
+
+      - name: Kill lingering Unity processes
+        shell: powershell
+        run: |
+          $workspace = "${{ github.workspace }}"
+          Get-Process -Name "Unity","AssetImportWorker*","UnityCrashHandler*" -ErrorAction SilentlyContinue | ForEach-Object {
+            $cmdline = (Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)" -ErrorAction SilentlyContinue).CommandLine
+            if ($cmdline -like "*$workspace*") {
+              Write-Host "Killing $($_.Name) (PID $($_.Id))"
+              Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
+          Remove-Item -Force -ErrorAction SilentlyContinue "${{ github.workspace }}\Temp\UnityLockfile"
+          Remove-Item -Force -ErrorAction SilentlyContinue "${{ github.workspace }}\Temp\workerlic"
+
+      - name: Clean previous ServerData
+        shell: powershell
+        run: Remove-Item -Recurse -Force -ErrorAction SilentlyContinue "${{ github.workspace }}\ServerData"
+
+      - name: Build Addressables
+        shell: powershell
+        run: |
+          $log = "${{ github.workspace }}\unity-addressables.log"
+          $proc = Start-Process -FilePath $env:UNITY_EXE -ArgumentList @(
+            "-batchmode", "-nographics",
+            "-projectPath", "${{ github.workspace }}",
+            "-buildTarget", "Android",
+            "-executeMethod", "AddressableAutomation.BuildFromCLI",
+            "-logFile", $log,
+            "-addressableProfile", "Develop"
+          ) -PassThru -Wait
+          $exitCode = $proc.ExitCode
+          if ($exitCode -ne 0) { exit $exitCode }
+
+      - name: Configure AWS credentials
+        if: ${{ !inputs.dry_run }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload bundles to S3 (immutable, long cache)
+        id: s3_upload
+        if: ${{ !inputs.dry_run }}
+        shell: powershell
+        run: |
+          aws s3 sync ServerData/Android/ "s3://${{ secrets.AWS_S3_BUCKET }}/Android/" `
+            --cache-control "public, max-age=31536000" `
+            --exclude "*" `
+            --include "*.bundle" `
+            --delete
+
+      - name: Upload catalog to S3 (no-cache)
+        if: ${{ !inputs.dry_run }}
+        shell: powershell
+        run: |
+          aws s3 sync ServerData/Android/ "s3://${{ secrets.AWS_S3_BUCKET }}/Android/" `
+            --cache-control "no-cache, no-store, must-revalidate" `
+            --exclude "*" `
+            --include "catalog_*.json" `
+            --include "catalog_*.hash" `
+            --delete
+
+      - name: Invalidate CloudFront catalog cache
+        if: ${{ !inputs.dry_run }}
+        shell: powershell
+        run: |
+          aws cloudfront create-invalidation `
+            --distribution-id "${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_ID }}" `
+            --paths "/Android/catalog_*.json" "/Android/catalog_*.hash"
+
+      - name: Discord notify (S3 upload)
+        if: ${{ !inputs.dry_run }}
+        shell: powershell
+        run: |
+          $status = if ("${{ steps.s3_upload.outcome }}" -eq "success") { "v" } else { "x" }
+          $label = if ("${{ steps.s3_upload.outcome }}" -eq "success") { "성공" } else { "실패" }
+          $color = if ("${{ steps.s3_upload.outcome }}" -eq "success") { 3066993 } else { 15158332 }
+          $json = [System.Text.Encoding]::UTF8.GetBytes(@"
+          {"embeds":[{"title":"[$status] S3 업로드 $label","color":$color,"fields":[{"name":"Dry run","value":"${{ inputs.dry_run }}","inline":true}],"url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}]}
+          "@.Trim())
+          $wc = New-Object System.Net.WebClient
+          $wc.Headers.Add("Content-Type", "application/json; charset=utf-8")
+          $wc.UploadData("${{ secrets.DISCORD_WEBHOOK_URL }}", "POST", $json) | Out-Null
+
+      - name: Discord notify
+        if: always()
+        shell: powershell
+        run: |
+          $status = if ("${{ job.status }}" -eq "success") { "v" } else { "x" }
+          $label = if ("${{ job.status }}" -eq "success") { "성공" } else { "실패" }
+          $color = if ("${{ job.status }}" -eq "success") { 3066993 } else { 15158332 }
+          $json = [System.Text.Encoding]::UTF8.GetBytes(@"
+          {"embeds":[{"title":"[$status] Addressables 빌드 $label","color":$color,"fields":[{"name":"Dry run","value":"${{ inputs.dry_run }}","inline":true}],"url":"https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"}]}
+          "@.Trim())
+          $wc = New-Object System.Net.WebClient
+          $wc.Headers.Add("Content-Type", "application/json; charset=utf-8")
+          $wc.UploadData("${{ secrets.DISCORD_WEBHOOK_URL }}", "POST", $json) | Out-Null
