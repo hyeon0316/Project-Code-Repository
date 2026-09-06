@@ -476,6 +476,8 @@ CDN 실패·로컬 테이블 누락은 전부 `throw`함.
 던전 맵이 노드 그래프(전투 → 분기 → 상점 → 보스) 구조인데,
 인스펙터에서 노드와 연결을 리스트로 편집하면 형태를 볼 수 없어 실수가 잦았음.
 
+<img width="800" height="450" alt="DungeonMapEditor_Test" src="https://github.com/user-attachments/assets/0b201e01-ea12-47df-b57c-3d6e8eaa73cf" />
+
 **1. GraphView로 시각 편집기 구성**
 
 `EditorWindow` + `GraphView`(UIElements)로 노드를 드래그하고 선으로 연결하는 창을 만듦.
