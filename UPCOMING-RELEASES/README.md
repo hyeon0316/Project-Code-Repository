@@ -499,6 +499,8 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 
 #### 레이아웃 편집 인스펙터 (UIMultiViewInspector)
 
+<img width="800" height="450" alt="UIMultiView_Test" src="https://github.com/user-attachments/assets/90bf7105-e124-4840-b29d-efe9a7ff408e" />
+
 `UIMultiView`는 자식들의 배치를 View 이름별로 들고 있는데,
 기본 인스펙터로 편집하면 리스트 안의 좌표 숫자를 직접 고쳐야 해서 결과를 볼 수 없음.
 
