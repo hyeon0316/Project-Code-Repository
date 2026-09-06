@@ -681,12 +681,6 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/25a7084e2e26873a971eea
 
 교체 시 이전 핸들러를 반드시 해제하므로, 대화를 여러 번 오갈 때 콜백이 중복 등록되지 않음.
 
-**문구는 키로만 들고 있음**
-
-노드와 클립 모두 문장이 아니라 로컬라이즈 키를 저장함.
-출력 직전에 키를 문구로 바꾸고, `TextTokenResolver`로 플레이어 이름 같은 치환자를 처리함.
-번역을 추가해도 그래프나 타임라인 에셋을 건드리지 않음.
-
 <br></br>
 
 ### 데이터 테이블 파이프라인
@@ -956,6 +950,3 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 UI가 파괴됐는데 해제를 빠뜨리면 다음 이벤트에서 예외가 남.
 역순 순회로 발견 즉시 제거함 (순회 중 제거해도 인덱스가 밀리지 않음).
 https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Shared/GlobalEvent.cs#L47-L70
-
-Unity 오브젝트는 `== null` 오버로딩 때문에 일반 null 검사로 파괴 여부를 알 수 없어,
-`is Object unityObj && unityObj == null` 로 따로 확인함.
