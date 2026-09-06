@@ -1,24 +1,13 @@
 # UPCOMING-RELEASES (개발 진행중)
 
 ## 프로젝트 소개
-- 개발기간 : 2024/02 ~ 진행중
+- 개발기간 : 2024/03 ~ 진행중
 - 장르 : 턴제 던전 RPG(3D)
 - 플랫폼 : Mobile (Google Play / iOS 예정)
-- 도구 : Unity 2022.3.47f1, C#, AWS Lambda(.NET 8), 뒤끝(BackEnd) SDK
-- 인원 : 클라이언트 1 (본인), 그래픽 외주
+- 도구 : Unity, C#, 클라우드 서비스(뒤끝)
 
 ## 프로젝트 인원 및 역할
 - hyeon0316(김현진) : 클라이언트 전체, 서버 펑션, 빌드 파이프라인
-
-## 담당 범위
-**클라이언트 전체 + 서버 검증 로직 + 배포 자동화**
-
-앞선 프로젝트들은 서버 개발자가 따로 있어서 클라이언트만 담당했지만,
-이번에는 서버 펑션(AWS Lambda)과 CI/CD까지 직접 작성함.
-
-> **이 문서는 개발이 끝나지 않은 프로젝트의 중간 기록**임.
-> 전체 스크립트 470여 개 중 설계 판단이 드러나는 것만 골라 담았고,
-> 완료된 프로젝트가 아니므로 "개선점"은 이미 인지하고 있는 남은 과제를 적음.
 
 ## 프로젝트 구조
 
@@ -87,8 +76,9 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 
 **3. 효과 데이터는 코드가 아닌 테이블에**
 
-`EffectEntry`(수치·스택·최대스택·설명 포맷)는 엑셀 → JSON → 서버 CDN 경로로 들어옴.
-스킬 SO는 `EffectIDs` 문자열 배열만 들고 있어서, 밸런스 수정에 빌드가 필요 없음.
+`EffectEntry`(수치·스택·최대스택·설명 포맷)는 `EffectTable`에서 옴.
+서버 검증에 쓰이지 않는 클라 전용 테이블이라 엑셀 → JSON → Addressables 경로로 실림.
+스킬 SO는 `EffectIDs` 문자열 배열만 들고 있어서, 효과를 바꿔도 스킬 에셋을 건드리지 않음.
 
 ```csharp
 public class EffectEntry
@@ -102,9 +92,6 @@ public class EffectEntry
 }
 ```
 
-앞선 프로젝트(TreasureWak)에서 아이템 46종을 46개 클래스로 만들어 밸런스 수정마다
-프로그래머와 빌드가 필요했던 문제를 이번에는 데이터 분리로 해결함.
-
 **4. 저항 굴림을 부여 시점 한 곳에 둠**
 
 기절·출혈·중독은 저항 스탯의 영향을 받음. 각 핸들러가 저항을 검사하면 3곳에 같은 코드가 생김.
@@ -113,14 +100,6 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 
 `RESIST_MAP`에 없는 타입은 저항 대상이 아니므로 항상 통과함.
 `Random.value`가 1.0을 포함하기 때문에 저항 100%에서 완전 면역이 되도록 비교를 따로 처리함.
-
-- 개선점
-
-| 항목 | 문제 | 개선 방향 |
-|---|---|---|
-| 핸들러 딕셔너리 4개 | `Execute`가 4개를 순서대로 조회. 타입이 어느 딕셔너리에 있는지 코드로만 알 수 있음 | 등록 시점에 단일 딕셔너리로 합치고 인터페이스는 캐스팅으로 판별 |
-| 도트 대기가 핸들러 안에 | `BleedHandler.Dot()`이 `UniTask.WaitForSeconds(1)`을 직접 호출해 연출 시간이 로직에 섞임 | 대기는 호출부(BattleController)로 올리고 핸들러는 수치만 |
-| `EffectInstance.Context` 보관 | 시전자 참조를 계속 들고 있어, 시전자가 죽어도 해제되지 않음 | 시전자 사망 시 관련 효과 정리 규칙 필요 |
 
 <br></br>
 
@@ -172,14 +151,6 @@ public bool RemoveAllModifiersFromSource(object source)
 ```
 
 `Predicate`를 생성자에서 한 번만 만들어 필드로 재사용함 (`RemoveAll` 호출마다 델리게이트 할당이 생기지 않게).
-
-- 개선점
-
-| 항목 | 문제 | 개선 방향 |
-|---|---|---|
-| `m_SourceToRemove` 필드 경유 | 델리게이트 할당을 피하려고 상태를 필드에 잠깐 담는 구조라, 재진입 시 값이 덮일 여지 | 소스별 인덱스(Dictionary) 보유 |
-| `Mathf.RoundToInt` 반환 | `FlatStat`이 계산 끝에 반올림해 소수점 버프가 누적되면 오차 | 표시 시점에만 반올림 |
-| `GetContribution` 전체 재계산 | 장비 목록을 훑으며 호출하면 모디파이어 수 × 장비 수만큼 순회 | 결과 캐시 또는 일괄 산출 API |
 
 <br></br>
 
@@ -237,14 +208,6 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 서버와 클라이언트의 배포 시점이 다르고 구버전 빌드가 스토어에 남아 있어서, 양쪽을 지원해야 했음.
 https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/FrameWork/BFuncResponseHandler.cs#L49-L68
 
-- 개선점
-
-| 항목 | 문제 | 개선 방향 |
-|---|---|---|
-| `WriteBatcher`가 static | Lambda 컨테이너가 재사용되면 이전 호출의 큐가 남을 수 있음 | 요청 단위 인스턴스로 전환 |
-| 배치 상한 10건 고정 | 상한 도달 시 자동 `Flush`라 트랜잭션이 쪼개짐 | 상한을 넘는 요청은 실패로 처리 |
-| 클라이언트 낙관적 반영 없음 | 서버 응답까지 UI가 멈춰 체감 지연 | 응답 실패 시 롤백하는 낙관적 갱신 |
-
 <br></br>
 
 ### 던전 진행 복원
@@ -295,14 +258,6 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 
 미등록 타입은 기본 실행기로 떨어지므로, 노드를 추가해도 진행 기록이 누락되지 않음.
 
-- 개선점
-
-| 항목 | 문제 | 개선 방향 |
-|---|---|---|
-| 로컬 저장(PlayerPrefs) | 기기 저장이라 조작 가능하고 기기 변경 시 유실 | 서버 저장으로 이전 (보상이 걸린 진행이므로) |
-| 저장 호출이 여러 곳 | `SaveProgress()` 호출부가 흩어져 어느 시점에 저장되는지 추적이 어려움 | 상태 변경 지점에서 dirty 표시 후 일괄 저장 |
-| `BattleProgress` 전체 직렬화 | 턴마다 전체를 다시 쓰므로 유닛이 늘면 비용 증가 | 변경분만 기록 |
-
 <br></br>
 
 ### UI 프레임워크
@@ -320,7 +275,7 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 같은 프레임에 팝업 3개가 요청돼도 순서대로 뜨고, 서로의 생성 타이밍이 겹치지 않음.
 https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/FrameWork/UI/Popup/PopupFactory.cs#L19-L36
 
-**2. 화면 생명주기를 6단계로 규격화**
+**2. Page 생명주기를 6단계로 규격화**
 
 `OnCreate → OnLoad → OnTransitionStart → OnResume → OnPause → OnFinish`.
 데이터 로딩은 `OnLoad`, 연출은 `OnTransitionStart`에 두어 로딩 중 애니메이션이 튀지 않게 함.
@@ -350,35 +305,35 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 
 삭제된 자식은 `RemoveDeletedChildrens()`로 정리해 null 참조가 남지 않게 함.
 
-- 개선점
-
-| 항목 | 문제 | 개선 방향 |
-|---|---|---|
-| `PageQuery` 리플렉션 | 필드명이 문자열이라 리팩터링 시 조용히 깨지고, 오타가 런타임에만 드러남 | 파라미터 객체 전달로 전환 |
-| `GoAsync` 중복 진입 차단 | 같은 화면이면 `null` 반환인데 호출부가 확인하지 않으면 무시됨 | 명시적 실패 타입 반환 |
-| `PopupFactory.Clear` | `DestroyImmediate`를 런타임에 사용 | `Destroy`로 변경 |
-| 화면 파괴 시 UniTask 미취소 | `Back()`으로 파괴돼도 진행 중이던 비동기가 남음 | `CancellationToken` 연결 |
-
 <br></br>
 
 ### 데이터 테이블 파이프라인
 
 기획 수치가 코드에 있으면 밸런스 수정마다 빌드가 필요함.
-엑셀에서 시작해 서버 CDN까지 가는 경로를 만들어, 배포 없이 수치를 바꿀 수 있게 함.
+수치를 전부 엑셀에 두고, 배포 없이 바꿀 수 있게 함.
+
+테이블이 **서버 검증에 쓰이는지**에 따라 경로가 갈림.
+서버가 읽어야 하는 테이블은 뒤끝 콘솔에 엑셀을 그대로 등록하고,
+클라이언트만 쓰는 테이블은 JSON으로 변환해 앱에 같이 실음.
 
 ```
-기획 엑셀(.xlsx)
+[서버 검증 대상] 기획 엑셀(.xlsx)
+    ↓ 뒤끝 콘솔에 엑셀 직접 등록 (변환 없음)
+서버 CDN ────────────────┐
+                         │
+[클라 전용]   기획 엑셀(.xlsx)
     ↓ ExcelToJsonConverter (에디터 툴)
-JSON
-    ↓ 뒤끝 콘솔 업로드
-서버 CDN ─────────┐
-                  ↓ 게임 시작 시
-Addressables ──→ BDatabase.Init() → JsonDispatcher → 각 테이블 클래스
-(클라 전용 테이블)
+JSON → Addressables ─────┤
+                         ↓ 게임 시작 시
+              BDatabase.Init() → JsonDispatcher → 각 테이블 클래스
 ```
 
-**1. 엑셀을 JSON으로 변환**
+서버 CDN 테이블은 콘솔에서 수정하면 **앱 배포 없이 즉시 반영**됨.
+클라 전용은 Addressables에 포함되므로 리소스 갱신이 필요하지만, 대신 서버 왕복이 없음.
 
+**1. 클라 전용 테이블을 JSON으로 변환**
+
+뒤끝 콘솔을 거치지 않는 테이블은 에디터 툴로 직접 변환함.
 시트를 `DataTable`로 읽어 그대로 직렬화함.
 전부 빈 열은 제거해서, 기획자가 작업 중 남긴 빈 칸이 JSON에 들어가지 않게 함.
 https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Editor/ExcelToJsonConverter.cs#L176-L199
@@ -389,6 +344,10 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbb
 
 서버 검증에 쓰이는 테이블은 CDN에서, 클라이언트 전용(연출·표기)은 Addressables에서 받음.
 클라 전용은 CDN 왕복이 없으므로 로딩이 빠르고, 서버 검증 대상만 서버와 동기화하면 됨.
+
+기준은 **서버가 그 값을 알아야 하는가**임.
+아이템 가격·보상 수량처럼 서버가 검증에 쓰는 값은 CDN에 둬야 클라이언트와 같은 수치를 봄.
+스킬 설명 문구·이펙트 연출값처럼 서버가 쓰지 않는 것은 굳이 CDN에 올리지 않음.
 https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/FrameWork/BDatabase.cs#L14-L29
 
 로컬 테이블 9종은 `UniTask.WhenAll`로 동시에 로드함.
