@@ -400,15 +400,6 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/5fbf1012452506895e258c
 `ETutorialID`는 int로 직렬화되므로 **enum 순서를 바꾸면 기존 유저의 기록이 어긋남**.
 주석으로 명시해두고 새 항목은 뒤에만 추가함.
 
-- 개선점
-
-| 항목 | 문제 | 개선 방향 |
-|---|---|---|
-| 저장 실패 처리 | `Save()`에서 실패 시 `m_IsDataChanged = true`로 되돌린 직후 `false`로 덮어써서 재시도가 안 됨 | 분기 정리 필요 (확인된 버그) |
-| 앵커 레지스트리가 static | 씬 전환 시 해제가 누락되면 등록 정보가 남을 수 있음 | 씬 언로드 시점에 일괄 정리 |
-| 스텝 되돌리기 없음 | 중간에 앱이 꺼지면 튜토리얼을 처음부터 다시 봐야 함 | 진행 중인 스텝 인덱스도 저장 |
-| 구멍이 원 고정 | 가로로 긴 버튼은 여백이 크게 남음 | rect 비율에 맞춘 타원 또는 둥근 사각형 |
-
 <br></br>
 
 ### 데이터 테이블 파이프라인
@@ -649,14 +640,6 @@ if (settings != null)
 https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Editor/AddressableAutomation.cs#L36-L57
 
 이걸 넣기 전에는 Unity 배치 모드가 에러 로그만 남기고 0으로 끝나서, 실패한 빌드가 업로드되는 일이 있었음.
-
-- 개선점
-
-| 항목 | 문제 | 개선 방향 |
-|---|---|---|
-| self-hosted 러너 의존 | Unity 라이선스 문제로 로컬 러너 사용 중이라 병렬 빌드 불가 | 라이선스 서버 또는 컨테이너 러너 |
-| Library 캐시 미사용 | 매 빌드 임포트를 다시 해 시간이 오래 걸림 | `actions/cache`로 Library 캐싱 |
-| iOS 미구성 | Android 경로만 있음 | Xcode 빌드 단계 추가 |
 
 <br></br>
 
