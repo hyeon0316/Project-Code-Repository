@@ -1,1 +1,584 @@
-text
+# UPCOMING-RELEASES (개발 진행중)
+
+## 프로젝트 소개
+- 개발기간 : 2024/02 ~ 진행중
+- 장르 : 턴제 던전 RPG(3D)
+- 플랫폼 : Mobile (Google Play / iOS 예정)
+- 도구 : Unity 2022.3.47f1, C#, AWS Lambda(.NET 8), 뒤끝(BackEnd) SDK
+- 인원 : 클라이언트 1 (본인), 그래픽 외주
+
+## 프로젝트 인원 및 역할
+- hyeon0316(김현진) : 클라이언트 전체, 서버 펑션, 빌드 파이프라인
+
+## 담당 범위
+**클라이언트 전체 + 서버 검증 로직 + 배포 자동화**
+
+앞선 프로젝트들은 서버 개발자가 따로 있어서 클라이언트만 담당했지만,
+이번에는 서버 펑션(AWS Lambda)과 CI/CD까지 직접 작성함.
+
+> **이 문서는 개발이 끝나지 않은 프로젝트의 중간 기록**임.
+> 전체 스크립트 470여 개 중 설계 판단이 드러나는 것만 골라 담았고,
+> 완료된 프로젝트가 아니므로 "개선점"은 이미 인지하고 있는 남은 과제를 적음.
+
+## 프로젝트 구조
+
+어셈블리를 4계층으로 나누고 참조 방향을 한쪽으로 고정함.
+계층을 넘는 참조가 컴파일 단계에서 막히므로, 순환 참조가 생기기 전에 드러남.
+
+```
+Core ──────── 확장 메서드, 싱글톤, Localize, UIMultiView (의존 없음)
+  ↑
+Shared ────── Enum, Interface, SO 정의, 서버 테이블 DTO
+  ↑
+FrameWork ─── Manager, UI(Page/Popup), BDatabase, Addressables
+  ↑
+GamePlay ──── Dungeon, Character, Item, Shop, Quest ... (실제 게임 로직)
+
+ScriptsEditor ── 위 전부 참조. 에디터 툴 (Editor 플랫폼 전용)
+```
+
+```
+[클라이언트 — Unity]
+ContentsManager   : 모든 게임 시스템의 허브. Get<T>()로 접근
+BDatabase         : 서버 CDN + Addressables 테이블 로딩
+UIManager         : Page(화면) / Popup(팝업) 이중 스택
+EffectExecutor    : 버프·디버프·도트 효과 실행
+BattleController  : 턴 순서, 스킬 실행, 전투 진행
+
+        ↕ BFunc 호출 / 검증된 결과 수신
+
+[서버 — AWS Lambda + 뒤끝]
+ConsumeItemFunction   : 아이템 소비 검증·차감
+DungeonRewardFunction : 던전 보상 지급 (장비 랜덤 롤 포함)
+CharacterGachaFunction: 가챠 확률·천장 처리
+ShopFunction          : 상점 구매 검증
+BackendSharedLib      : 공용 응답·트랜잭션·아이템ID 규격
+```
+
+## 코드
+
+### 이펙트 시스템
+
+버프·디버프·출혈·중독·기절이 전부 "효과"지만 생명주기가 서로 다름.
+데미지는 즉시 끝나고, 버프는 해제 시점에 되돌려야 하고, 도트는 매 턴 실행되며 연출 대기가 필요함.
+
+이걸 하나의 인터페이스로 묶으면 데미지 핸들러가 쓰지도 않을 `Clear()`와 `Dot()`을 빈 구현으로 갖게 됨.
+
+**1. 생명주기별로 인터페이스를 나눔**
+
+필요한 계약만 갖도록 4종으로 분리함. 핸들러는 자기에게 해당하는 것만 구현함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/GamePlay/Effect/Handler/IEffectHandler.cs#L1-L23
+
+| 인터페이스 | 계약 | 해당 효과 |
+|---|---|---|
+| `IEffectHandler` | `Execute(effect)` | 대상이 없는 효과 (스태미나 회복) |
+| `ITargetEffectHandler` | `Execute(effect, context)` | 즉시 끝나는 효과 (데미지, 힐) |
+| `IStatusEffectHandler` | `Execute` + `Clear` | 해제가 필요한 효과 (스탯 버프, 기절) |
+| `IDotEffectHandler` | `Execute` + `Dot` | 매 턴 실행되는 효과 (출혈, 중독) |
+
+**2. 스탯 버프 핸들러를 enum에서 자동 등록**
+
+버프·디버프는 대상 스탯만 다르고 처리가 같음. 13종을 각각 등록하면 스탯이 늘 때마다 등록도 늘어남.
+`EffectType`을 순회하면서 스탯 매핑이 있는 것만 같은 핸들러 인스턴스에 연결함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/GamePlay/Effect/EffectExecutor.cs#L23-L38
+
+`EffectTypeExtension`의 `STAT_MAP`에 한 줄만 추가하면 새 버프가 자동으로 동작함.
+디버프 부호도 `IsDebuff()` 한 곳에서 결정되므로 핸들러는 부호를 신경쓰지 않음.
+
+**3. 효과 데이터는 코드가 아닌 테이블에**
+
+`EffectEntry`(수치·스택·최대스택·설명 포맷)는 엑셀 → JSON → 서버 CDN 경로로 들어옴.
+스킬 SO는 `EffectIDs` 문자열 배열만 들고 있어서, 밸런스 수정에 빌드가 필요 없음.
+
+```csharp
+public class EffectEntry
+{
+    public string EffectID;
+    public EffectType EffectType;
+    public float Value;
+    public int Stack;      // 지속 턴 수
+    public int MaxStack;   // 0이면 무한 중첩
+    public string DescFormatKey;
+}
+```
+
+앞선 프로젝트(TreasureWak)에서 아이템 46종을 46개 클래스로 만들어 밸런스 수정마다
+프로그래머와 빌드가 필요했던 문제를 이번에는 데이터 분리로 해결함.
+
+**4. 저항 굴림을 부여 시점 한 곳에 둠**
+
+기절·출혈·중독은 저항 스탯의 영향을 받음. 각 핸들러가 저항을 검사하면 3곳에 같은 코드가 생김.
+효과가 실제로 붙는 `AddEffect()` 한 곳에서만 굴림.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/GamePlay/Dungeon/DungeonUnit.cs#L194-L228
+
+`RESIST_MAP`에 없는 타입은 저항 대상이 아니므로 항상 통과함.
+`Random.value`가 1.0을 포함하기 때문에 저항 100%에서 완전 면역이 되도록 비교를 따로 처리함.
+
+- 개선점
+
+| 항목 | 문제 | 개선 방향 |
+|---|---|---|
+| 핸들러 딕셔너리 4개 | `Execute`가 4개를 순서대로 조회. 타입이 어느 딕셔너리에 있는지 코드로만 알 수 있음 | 등록 시점에 단일 딕셔너리로 합치고 인터페이스는 캐스팅으로 판별 |
+| 도트 대기가 핸들러 안에 | `BleedHandler.Dot()`이 `UniTask.WaitForSeconds(1)`을 직접 호출해 연출 시간이 로직에 섞임 | 대기는 호출부(BattleController)로 올리고 핸들러는 수치만 |
+| `EffectInstance.Context` 보관 | 시전자 참조를 계속 들고 있어, 시전자가 죽어도 해제되지 않음 | 시전자 사망 시 관련 효과 정리 규칙 필요 |
+
+<br></br>
+
+### 스탯 모디파이어
+
+장비·버프·디버프·패시브가 같은 스탯에 동시에 붙음.
+"공격력 +10" 과 "공격력 +20%" 의 적용 순서에 따라 결과가 달라지므로 순서를 규격으로 고정해야 했음.
+
+**1. 계산 순서를 enum 값으로 고정**
+
+`Flat → Percent → FixedFlat → FixedPercent` 순서를 `EStatValueType` 선언 순서가 그대로 결정함.
+모디파이어는 추가 시점에 `CaculateOrder` 오름차순 위치로 삽입되므로, 붙은 순서와 무관하게 결과가 같음.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/GamePlay/Character/Stat/FlatStat.cs#L7-L18
+
+같은 order끼리는 삽입 순서를 유지해야 `FixedPercent` 곱 순서가 흔들리지 않으므로,
+`>` 비교로 멈춰서 안정 삽입(stable insert)이 되게 함.
+
+**2. Percent를 구간으로 묶어서 합산**
+
+연속된 `Percent`는 각각 곱하는 게 아니라 합산 후 한 번만 곱해야 함(+10%, +20% → ×1.3).
+구간이 끊기는 지점에서 누적합을 적용함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/GamePlay/Character/Stat/FlatStat.cs#L30-L74
+
+**3. 기여도를 역산으로 구함**
+
+장비 상세 화면에서 "이 장비가 공격력을 얼마나 올렸는가"를 표시해야 함.
+`Percent`는 base에 곱해지므로 모디파이어 값을 단순 합산하면 실제 기여분과 다름.
+
+해당 모디파이어를 **뺀 상태로 다시 계산**해서 차이를 구하는 방식으로 해결함.
+계산식이 아무리 복잡해져도 기여도 산출은 그대로 동작함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/GamePlay/Character/Stat/Stat.cs#L91-L98
+
+제외 계산에서도 `Percent` 구간이 끊기는 지점을 놓치지 않도록,
+다음 유효 항목을 미리 확인하는 `HasNextPercent()`를 둠.
+
+**4. 캐싱과 소스 단위 제거**
+
+`ResultValue`는 `m_IsDirty`일 때만 재계산함. 전투 중 매 프레임 조회해도 비용이 없음.
+해제는 `Source` 참조로 일괄 제거하므로, 장비를 벗기거나 버프가 끝날 때 어떤 모디파이어를 붙였는지 기억할 필요가 없음.
+
+```csharp
+public bool RemoveAllModifiersFromSource(object source)
+{
+    m_SourceToRemove = source;
+    int removeCnt = m_StatModifiers.RemoveAll(m_Predicate);
+    m_SourceToRemove = null;
+    // ...
+}
+```
+
+`Predicate`를 생성자에서 한 번만 만들어 필드로 재사용함 (`RemoveAll` 호출마다 델리게이트 할당이 생기지 않게).
+
+- 개선점
+
+| 항목 | 문제 | 개선 방향 |
+|---|---|---|
+| `m_SourceToRemove` 필드 경유 | 델리게이트 할당을 피하려고 상태를 필드에 잠깐 담는 구조라, 재진입 시 값이 덮일 여지 | 소스별 인덱스(Dictionary) 보유 |
+| `Mathf.RoundToInt` 반환 | `FlatStat`이 계산 끝에 반올림해 소수점 버프가 누적되면 오차 | 표시 시점에만 반올림 |
+| `GetContribution` 전체 재계산 | 장비 목록을 훑으며 호출하면 모디파이어 수 × 장비 수만큼 순회 | 결과 캐시 또는 일괄 산출 API |
+
+<br></br>
+
+### 클라이언트 - 서버 검증 분리
+
+모바일 게임이라 메모리 조작·패킷 위조를 전제해야 함.
+재화·아이템이 걸린 처리는 클라이언트가 결과를 정하지 않고, 서버 펑션(AWS Lambda)이 검증 후 확정함.
+
+**1. 소비는 요청, 확정은 서버 응답**
+
+아이템 사용 시 클라이언트는 "이걸 쓰겠다"만 보냄. 보유 수량 검사와 차감은 전부 서버에서 함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/ServerFunctions/ConsumeItemFunction/Function.cs#L84-L128
+
+보유량보다 많이 요청하거나 갖고 있지 않은 장비 인스턴스를 지목하면 `Suspect`로 응답함.
+같은 아이템이 요청에 여러 번 들어오는 경우를 대비해 먼저 합산한 뒤 한 번에 검사함
+(개별 검사하면 각각은 통과하지만 합계는 보유량을 넘는 상황이 생김).
+
+**2. 검증 실패를 두 등급으로 나눔**
+
+정상 플레이로는 나올 수 없는 요청과, 단순 오류를 구분함.
+
+| 응답 | 사용 시점 | 동작 |
+|---|---|---|
+| `Error(code, detail)` | 서버 오류, 유효성 실패 | 클라이언트에 코드 전달 |
+| `Suspect(param)` | 정상 플레이로 불가능한 요청 | **GameLog에 자동 기록** 후 차단 |
+
+`Suspect`는 응답 생성과 로그 적재가 한 함수에 묶여 있어, 호출부가 로그를 빠뜨릴 수 없음.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/ServerFunctions/BackendSharedLib/ReturnObject.cs#L10-L17
+
+**3. 여러 테이블 갱신을 트랜잭션으로 묶음**
+
+아이템 소비는 `Inventory_Stack`과 `Inventory_Equip` 두 테이블에 걸림.
+따로 쓰면 중간에 실패했을 때 한쪽만 반영된 상태가 남음.
+
+쓰기를 큐에 모았다가 `Flush()`에서 2건 이상이면 `TransactionWriteV2`로 묶음.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/ServerFunctions/BackendSharedLib/WriteBatcher.cs#L18-L41
+
+단일 테이블도 같은 API로 호출하므로, 나중에 테이블이 추가돼도 호출부를 고치지 않음.
+
+**4. 가챠 확률과 천장을 서버에서만 처리**
+
+확률·천장 카운트·중복 마일리지를 클라이언트가 알면 조작 대상이 됨.
+난수 생성과 천장 판정 전부 Lambda에서 하고, 클라이언트는 결과만 받아 연출함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/ServerFunctions/CharacterGachaFunction/GachaDraw.cs#L48-L93
+
+천장 카운트는 유저 데이터에 저장되므로 앱을 껐다 켜도 유지되고, 클라이언트가 초기화할 수 없음.
+
+**5. 응답 해석을 한 곳으로 모음**
+
+`suspect` / `error` / `success` 판별을 호출부마다 하면 분기를 빠뜨림.
+모든 BFunc 응답이 한 함수를 거치게 함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/FrameWork/BFuncResponseHandler.cs#L6-L37
+
+`error`는 구형(문자열)과 신형(`{code, detail}`) 두 형태를 모두 받음.
+서버와 클라이언트의 배포 시점이 다르고 구버전 빌드가 스토어에 남아 있어서, 양쪽을 지원해야 했음.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/FrameWork/BFuncResponseHandler.cs#L49-L68
+
+- 개선점
+
+| 항목 | 문제 | 개선 방향 |
+|---|---|---|
+| `WriteBatcher`가 static | Lambda 컨테이너가 재사용되면 이전 호출의 큐가 남을 수 있음 | 요청 단위 인스턴스로 전환 |
+| 배치 상한 10건 고정 | 상한 도달 시 자동 `Flush`라 트랜잭션이 쪼개짐 | 상한을 넘는 요청은 실패로 처리 |
+| 클라이언트 낙관적 반영 없음 | 서버 응답까지 UI가 멈춰 체감 지연 | 응답 실패 시 롤백하는 낙관적 갱신 |
+
+<br></br>
+
+### 던전 진행 복원
+
+모바일이라 전투 중 앱이 강제 종료되는 상황이 상시 발생함.
+던전을 처음부터 다시 시작하게 하면 이탈로 이어지므로, 전투 중간 상태까지 복원해야 했음.
+
+**1. 복원에 필요한 최소 상태만 저장**
+
+`DungeonProgress`가 진행 정보를, `BattleProgress`가 전투 상태를 나눠 보관함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/GamePlay/Dungeon/DungeonProgress.cs#L1-L34
+
+맵은 통째로 저장하지 않고 **시드만** 저장함. 같은 시드로 다시 생성하면 같은 맵이 나옴.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/GamePlay/Dungeon/RandomMapGenerator.cs#L8-L30
+
+노드 GUID도 `{seed}_{row}_{col}` 로 생성하므로, 재생성해도 클리어 기록이 그대로 대응됨.
+
+**2. 효과는 스택 수까지 복원**
+
+버프가 3턴 남았으면 3턴으로 돌아와야 함. 효과 목록과 스택을 기록했다가 그대로 되살림.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/GamePlay/Dungeon/Battle/BattleController.cs#L333-L343
+
+이때 스탯 보정은 **스택 수와 무관하게 한 번만** 적용해야 함.
+`Stack`은 지속 턴 수이지 중첩 배수가 아니라서, 스택만큼 반복하면 3턴 남은 버프가 3배로 걸림.
+
+**3. 저장 시점을 턴 시작으로 고정**
+
+턴 도중에 저장하면 스킬 연출 중간 상태가 남아 복원이 애매해짐.
+행동 순서를 정한 직후, 스킬 실행 전에만 기록함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/GamePlay/Dungeon/Battle/BattleController.cs#L385-L420
+
+복원 지점이 항상 "턴 시작"이라 한 가지 경우만 검증하면 됨.
+
+**4. 턴 순서 동점 처리를 규칙으로 고정**
+
+속도가 같을 때 순서가 실행마다 달라지면 저장·복원 결과가 어긋남.
+`속도 내림차순 → 아군 우선 → 원래 인덱스 오름차순`으로 완전 순서를 만듦.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/GamePlay/Dungeon/Battle/BattleController.cs#L344-L371
+
+`List.Sort`가 불안정 정렬이라 동점 시 순서를 보장하지 않으므로,
+원래 인덱스를 마지막 비교 기준으로 넣어 결정적(deterministic)으로 만듦.
+
+**5. 노드 타입별 진입 처리를 딕셔너리로 분기**
+
+던전 노드가 전투·상점·이야기·카드선택 등으로 늘어나는데, `switch`로 분기하면 타입 추가마다 수정해야 함.
+타입 → 실행기 딕셔너리로 두고, 공통 처리(진행 기록·저장)는 base가 담당함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/GamePlay/Dungeon/NodeExecutor/StageNodeExecutorRegistry.cs#L1-L23
+
+미등록 타입은 기본 실행기로 떨어지므로, 노드를 추가해도 진행 기록이 누락되지 않음.
+
+- 개선점
+
+| 항목 | 문제 | 개선 방향 |
+|---|---|---|
+| 로컬 저장(PlayerPrefs) | 기기 저장이라 조작 가능하고 기기 변경 시 유실 | 서버 저장으로 이전 (보상이 걸린 진행이므로) |
+| 저장 호출이 여러 곳 | `SaveProgress()` 호출부가 흩어져 어느 시점에 저장되는지 추적이 어려움 | 상태 변경 지점에서 dirty 표시 후 일괄 저장 |
+| `BattleProgress` 전체 직렬화 | 턴마다 전체를 다시 쓰므로 유닛이 늘면 비용 증가 | 변경분만 기록 |
+
+<br></br>
+
+### UI 프레임워크
+
+화면(Page)과 팝업(Popup)의 생명주기가 다름.
+화면은 히스토리를 쌓고 뒤로가기가 있으며 한 번에 하나만 보임.
+팝업은 여러 개가 겹칠 수 있고 순서대로 떠야 함.
+
+**1. Page는 히스토리 리스트, Popup은 스택 + 큐**
+
+화면 전환은 `GoAsync` / `Back`으로 히스토리를 관리하고, 이전 화면은 비활성만 시켜 재생성 비용을 없앰.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/FrameWork/UI/Page/PageFactory.cs#L27-L70
+
+팝업은 요청을 큐에 넣고 `OnUpdate`에서 한 프레임에 하나씩 생성함.
+같은 프레임에 팝업 3개가 요청돼도 순서대로 뜨고, 서로의 생성 타이밍이 겹치지 않음.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/FrameWork/UI/Popup/PopupFactory.cs#L19-L36
+
+**2. 화면 생명주기를 6단계로 규격화**
+
+`OnCreate → OnLoad → OnTransitionStart → OnResume → OnPause → OnFinish`.
+데이터 로딩은 `OnLoad`, 연출은 `OnTransitionStart`에 두어 로딩 중 애니메이션이 튀지 않게 함.
+
+`OnEnable`에서 `Animator`를 꺼두고 전환 시점에만 켜는데,
+프리팹 생성 즉시 애니메이터가 1프레임 재생돼 화면이 깜빡이는 문제가 있었음.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/FrameWork/UI/Page/PageBehaviour.cs#L12-L41
+
+**3. 화면 간 데이터 전달을 쿼리 문자열로**
+
+화면마다 전용 파라미터 클래스를 만들면 화면 수만큼 클래스가 늘어남.
+URL 쿼리 형식(`key=value&key2=value2`)을 리플렉션으로 필드에 주입함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/FrameWork/UI/Page/PageQuery.cs#L7-L27
+
+`UIManager`에 인스펙터로 경로와 쿼리를 넣고 바로 진입하는 테스트 버튼을 둬서,
+특정 화면을 확인할 때 타이틀부터 거치지 않아도 됨 (에디터 전용).
+
+**4. 한 오브젝트가 여러 레이아웃을 갖게 함**
+
+같은 UI가 상황에 따라 배치만 다른 경우(탭 전환 등)에 프리팹을 나누면 수정이 두 배가 됨.
+자식들의 위치·크기·활성 상태를 이름표(View)별로 저장해두고 전환 시 적용함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Core/Utilities/UIMultiView.cs#L41-L83
+
+저장은 커스텀 인스펙터가 담당함. 인스펙터가 열리고 닫히는 시점에 현재 배치를 자동 저장하므로,
+디자이너가 씬에서 옮긴 결과가 따로 저장 버튼을 누르지 않아도 반영됨.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Editor/UIMultiViewInspector.cs#L11-L29
+
+삭제된 자식은 `RemoveDeletedChildrens()`로 정리해 null 참조가 남지 않게 함.
+
+- 개선점
+
+| 항목 | 문제 | 개선 방향 |
+|---|---|---|
+| `PageQuery` 리플렉션 | 필드명이 문자열이라 리팩터링 시 조용히 깨지고, 오타가 런타임에만 드러남 | 파라미터 객체 전달로 전환 |
+| `GoAsync` 중복 진입 차단 | 같은 화면이면 `null` 반환인데 호출부가 확인하지 않으면 무시됨 | 명시적 실패 타입 반환 |
+| `PopupFactory.Clear` | `DestroyImmediate`를 런타임에 사용 | `Destroy`로 변경 |
+| 화면 파괴 시 UniTask 미취소 | `Back()`으로 파괴돼도 진행 중이던 비동기가 남음 | `CancellationToken` 연결 |
+
+<br></br>
+
+### 데이터 테이블 파이프라인
+
+기획 수치가 코드에 있으면 밸런스 수정마다 빌드가 필요함.
+엑셀에서 시작해 서버 CDN까지 가는 경로를 만들어, 배포 없이 수치를 바꿀 수 있게 함.
+
+```
+기획 엑셀(.xlsx)
+    ↓ ExcelToJsonConverter (에디터 툴)
+JSON
+    ↓ 뒤끝 콘솔 업로드
+서버 CDN ─────────┐
+                  ↓ 게임 시작 시
+Addressables ──→ BDatabase.Init() → JsonDispatcher → 각 테이블 클래스
+(클라 전용 테이블)
+```
+
+**1. 엑셀을 JSON으로 변환**
+
+시트를 `DataTable`로 읽어 그대로 직렬화함.
+전부 빈 열은 제거해서, 기획자가 작업 중 남긴 빈 칸이 JSON에 들어가지 않게 함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Editor/ExcelToJsonConverter.cs#L176-L199
+
+`~$`로 시작하는 엑셀 임시 파일은 정규식으로 걸러냄 (파일을 열어둔 채 변환하면 잡히는 문제).
+
+**2. 테이블 로딩 경로를 둘로 나눔**
+
+서버 검증에 쓰이는 테이블은 CDN에서, 클라이언트 전용(연출·표기)은 Addressables에서 받음.
+클라 전용은 CDN 왕복이 없으므로 로딩이 빠르고, 서버 검증 대상만 서버와 동기화하면 됨.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/FrameWork/BDatabase.cs#L14-L29
+
+로컬 테이블 9종은 `UniTask.WhenAll`로 동시에 로드함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/FrameWork/BDatabase.cs#L102-L124
+
+`ItemTable.Build`가 `EffectDic`을 참조하므로, 로딩이 `BuildData()`보다 먼저 끝나야 하는 순서 의존이 있음.
+
+**3. 테이블명 → 파서 매핑을 딕셔너리로**
+
+테이블이 35종인데 `switch`로 분기하면 길이가 계속 늘어남.
+이름과 파서를 짝지은 딕셔너리 하나로 두고, 등록되지 않은 키는 경고만 남기고 넘어감.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/FrameWork/JsonDispatcher.cs#L9-L45
+
+파싱 실패는 잡아서 **어느 테이블인지 로그로 남기고 다시 던짐**.
+테이블 하나가 잘못되면 게임이 시작되면 안 되지만, 35개 중 어느 것인지는 알아야 하기 때문.
+
+**4. 로딩 실패를 예외로 처리**
+
+CDN 실패·로컬 테이블 누락은 전부 `throw`함.
+데이터 없이 진행하면 이후에 엉뚱한 지점에서 `NullReference`가 나서 원인 추적이 어려워짐.
+
+- 개선점
+
+| 항목 | 문제 | 개선 방향 |
+|---|---|---|
+| `BDatabase`가 static 전역 | 테이블 35종이 전부 public static 필드라 접근 제어가 없음 | 조회 API만 노출하고 필드는 private |
+| 파서 등록이 수동 | 테이블 추가 시 `JsonDispatcher`에 직접 추가해야 하고 빠뜨려도 경고만 남음 | 속성(Attribute) 기반 자동 등록 |
+| 테이블 검증 없음 | 참조 무결성(존재하지 않는 EffectID 등)을 런타임에야 발견 | 에디터에서 사전 검사 |
+
+<br></br>
+
+### 에디터 툴 - 던전 맵 편집기
+
+던전 맵이 노드 그래프(전투 → 분기 → 상점 → 보스) 구조인데,
+인스펙터에서 노드와 연결을 리스트로 편집하면 형태를 볼 수 없어 실수가 잦았음.
+
+**1. GraphView로 시각 편집기 구성**
+
+`EditorWindow` + `GraphView`(UIElements)로 노드를 드래그하고 선으로 연결하는 창을 만듦.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Editor/DungeonMapEditor.cs#L26-L67
+
+행·열 수를 넣고 생성 버튼을 누르면 격자 형태로 노드를 자동 배치하고,
+`.asset`으로 저장해 런타임에서 그대로 읽음.
+
+**2. 노드 종류로 포트를 제한**
+
+시작 노드에 입력 포트가 있거나 종료 노드에 출력 포트가 있으면 순환이 생김.
+포트 생성 시점에 타입으로 막음.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Editor/DungeonMap/NodeView.cs#L31-L57
+
+`GetCompatiblePorts`로 자기 자신과 같은 방향 포트도 연결 후보에서 제외함.
+
+**3. 노드 위치를 에셋에 반영**
+
+`SetPosition` 오버라이드로 드래그한 좌표를 SO에 바로 기록함.
+창을 닫았다 열어도 배치가 유지되고, 런타임 맵 UI가 같은 좌표를 그대로 사용함.
+
+**4. 커스텀 프로퍼티 드로어**
+
+인스펙터에서 반복되던 작업을 드로어로 처리함.
+
+| 드로어 | 역할 |
+|---|---|
+| `ButtonDrawer` | 메서드에 `[Button]`만 붙이면 인스펙터에 실행 버튼 생성 |
+| `TagSelectorVariableDrawer` | 태그 문자열을 직접 입력하지 않고 드롭다운으로 선택 |
+| `SingleEnumDrawer` | 플래그 enum에서 하나만 고르도록 제한 |
+| `UIMultiViewInspector` | 레이아웃 View 추가·전환·자동 저장 |
+
+- 개선점
+
+| 항목 | 문제 | 개선 방향 |
+|---|---|---|
+| 에셋 경로 하드코딩 | `Assets/SO/Dungeon/Map/` 고정이라 폴더 구조 변경 시 깨짐 | 설정 SO로 분리 |
+| Undo 미지원 | 노드 삭제·이동에 `Undo` 등록이 없어 Ctrl+Z가 동작하지 않음 | `Undo.RecordObject` 적용 |
+| 그래프 유효성 검사 없음 | 연결되지 않은 노드나 도달 불가 경로를 저장할 수 있음 | 저장 시 도달성 검사 |
+
+<br></br>
+
+### 빌드 - 배포 자동화
+
+빌드마다 버전 올리고, Addressables 굽고, AAB 만들고, S3 올리고, Play Console에 올리는 과정을
+수동으로 하면 순서를 빠뜨리기 쉬움. GitHub Actions로 묶음.
+
+**1. 워크플로를 단계별로 분리**
+
+`release.yml`이 세 개의 하위 워크플로를 순서대로 호출함.
+
+```
+release.yml (workflow_dispatch)
+├── _build-addressables.yml  : Addressables 빌드 → S3 업로드
+├── _build-aab.yml           : 버전 증가 → AAB 빌드 → 서명
+└── _upload-play.yml         : Play Console 내부 테스트 트랙 업로드
+```
+
+각 단계를 입력값으로 건너뛸 수 있게 해서, Addressables만 갱신하거나 빌드만 확인하는 경우를 나눔.
+`dry_run`으로 S3·Play 업로드 없이 빌드만 돌려볼 수 있음.
+
+**2. 이전 단계 실패 시 다음 단계 차단**
+
+`needs`와 `if` 조건으로, 앞 단계가 성공했거나 건너뛴 경우에만 진행함.
+
+```yaml
+if: ${{ !cancelled() && !inputs.skip_aab &&
+        (needs.build-addressables.result == 'success' ||
+         needs.build-addressables.result == 'skipped') }}
+```
+
+Addressables 빌드가 실패했는데 AAB만 올라가면 리소스와 앱 버전이 어긋나므로 막아야 했음.
+
+**3. 버전 증가를 빌드 스크립트에서 처리**
+
+`patch / minor / major / none`을 인자로 받아 `bundleVersion`을 올림.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Editor/CIBuild.cs#L12-L60
+
+키스토어 정보도 인자로 받으므로 저장소에 서명 정보가 남지 않음 (Actions Secrets 사용).
+
+**4. Addressables 중복 빌드 차단**
+
+`BuildPlayerContent`를 별도 단계에서 이미 실행했는데,
+플레이어 빌드가 또 굽는 설정이면 시간이 두 배로 들고 결과가 덮임.
+플레이어 빌드 직전에 옵션을 꺼둠.
+
+```csharp
+var settings = AddressableAssetSettingsDefaultObject.Settings;
+if (settings != null)
+    settings.BuildAddressablesWithPlayerBuild =
+        AddressableAssetSettings.PlayerBuildOption.DoNotBuildWithPlayer;
+```
+
+**5. 실패 시 종료 코드 반환**
+
+`EditorApplication.Exit(1)`로 CI가 실패를 인지하게 함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Editor/AddressableAutomation.cs#L36-L57
+
+이걸 넣기 전에는 Unity 배치 모드가 에러 로그만 남기고 0으로 끝나서, 실패한 빌드가 업로드되는 일이 있었음.
+
+- 개선점
+
+| 항목 | 문제 | 개선 방향 |
+|---|---|---|
+| self-hosted 러너 의존 | Unity 라이선스 문제로 로컬 러너 사용 중이라 병렬 빌드 불가 | 라이선스 서버 또는 컨테이너 러너 |
+| Library 캐시 미사용 | 매 빌드 임포트를 다시 해 시간이 오래 걸림 | `actions/cache`로 Library 캐싱 |
+| iOS 미구성 | Android 경로만 있음 | Xcode 빌드 단계 추가 |
+
+<br></br>
+
+### 이벤트 버스
+
+로직(Contents)이 UI를 직접 참조하면 UI가 없는 상태(씬 전환 중, 팝업 미생성)에서 예외가 남.
+단방향 이벤트 버스로 로직 → UI 방향만 허용함.
+
+**1. 제네릭 하나로 모든 콘텐츠가 재사용**
+
+`GlobalEvent<T>`가 등록·해제·전송을 담당하고, 각 Contents가 자기 파라미터 타입으로 인스턴스를 가짐.
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Shared/GlobalEvent.cs#L9-L45
+
+`where T : struct` 제약으로 파라미터가 값 타입임을 보장해, 전송 후 발신자가 내용을 바꿀 수 없게 함.
+
+**2. 즉시 호출이 아니라 큐에 쌓음**
+
+`Send`는 큐에 넣기만 하고 `OnUpdate`에서 꺼내 전달함.
+로직 처리 도중에 UI 갱신이 끼어들어 컬렉션이 변경되는 상황을 막음.
+
+**3. 파괴된 핸들러를 순회 중 제거**
+
+UI가 파괴됐는데 해제를 빠뜨리면 다음 이벤트에서 예외가 남.
+역순 순회로 발견 즉시 제거함 (순회 중 제거해도 인덱스가 밀리지 않음).
+https://github.com/hyeon0316/Project-Code-Repository/blob/dacf77958b6edda7465dbbfa53ae62879ee8301f/UPCOMING-RELEASES/Scripts/Shared/GlobalEvent.cs#L47-L70
+
+Unity 오브젝트는 `== null` 오버로딩 때문에 일반 null 검사로 파괴 여부를 알 수 없어,
+`is Object unityObj && unityObj == null` 로 따로 확인함.
+
+- 개선점
+
+| 항목 | 문제 | 개선 방향 |
+|---|---|---|
+| 한 프레임에 1건만 처리 | `OnUpdate`가 `Dequeue`를 한 번만 해서, 이벤트가 몰리면 반영이 늦어짐 | 프레임당 큐를 비우도록 반복 |
+| 파괴 핸들러를 에러 로그로 | 정상적인 씬 전환에서도 로그가 찍혀 실제 오류와 섞임 | 경고로 낮추거나 해제 규약 강제 |
+| 핸들러 목록이 List | 등록·해제가 잦으면 선형 탐색 | 소량이라 현재는 문제없음, 필요 시 HashSet |
+
+<br></br>
+
+## 남은 작업
+
+개발 진행 중이라 아직 정리되지 않은 부분.
+
+| 영역 | 현재 상태 |
+|---|---|
+| 던전 진행 저장 | 로컬(PlayerPrefs) 저장 → 서버 이전 필요 |
+| iOS | 빌드 파이프라인 미구성 |
+| 전투 밸런스 | 수치 테이블만 구성, 조정 미완 |
+| 튜토리얼 | 기본 흐름만 동작 |
+| 사운드 | 효과음 일부만 적용 |
