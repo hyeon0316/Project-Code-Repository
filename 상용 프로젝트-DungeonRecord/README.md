@@ -1,4 +1,4 @@
-# UPCOMING-RELEASES (개발 진행중)
+# DungeonRecord
 
 ## 프로젝트 소개
 - 개발기간 : 2024/03 ~ 진행중
