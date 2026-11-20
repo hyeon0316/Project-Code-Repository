@@ -1,30 +1,28 @@
 using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using LitJson;
 using Cysharp.Threading.Tasks;
+using UnityEngine;
 
 public struct TutorialContentsParam
 {
     public enum EType
     {
-        Show,
         RefreshStep,
+        Wait,
         Hide,
     }
 
     public EType Type;
-    public TutorialSO Tutorial;
     public TutorialStep Step;
     public int PageIndex;
-    public bool IsFirstStep;
 
-    public TutorialContentsParam(EType type, TutorialSO tutorial = null, TutorialStep step = null, int pageIndex = 0, bool isFirstStep = false)
+    public TutorialContentsParam(EType type, TutorialStep step = null, int pageIndex = 0)
     {
         Type = type;
-        Tutorial = tutorial;
         Step = step;
         PageIndex = pageIndex;
-        IsFirstStep = isFirstStep;
     }
 }
 
@@ -35,12 +33,17 @@ public class TutorialContents : IManagableContents, GlobalEvent<TutorialContents
         public int[] Ids;
     }
 
+    private TutorialStep CurrentStep
+    {
+        get { return m_Tutorial.Steps[m_StepIndex]; }
+    }
+
     private GlobalEvent<TutorialContentsParam> m_GlobalEvent = new();
     private HashSet<int> m_SeenSet = new();
     private TutorialSO m_Tutorial;
     private int m_StepIndex;
     private int m_PageIndex;
-    private ETutorialAnchorID m_PendingAnchorID;
+    private bool m_IsWaiting;
     private bool m_IsDataChanged;
 
     public void Initialize()
@@ -54,6 +57,10 @@ public class TutorialContents : IManagableContents, GlobalEvent<TutorialContents
 
     public void UnInitialize()
     {
+        //튜토리얼 진행 중 종료되면 static 이벤트 구독이 남는다.
+        UnsubscribeAnchorEvents();
+        m_Tutorial = null;
+
         m_SeenSet.Clear();
         SaveManager.Instance.OnSaveTime -= Save;
         ApplicationEventsManager.Instance.OnExit -= Save;
@@ -63,6 +70,9 @@ public class TutorialContents : IManagableContents, GlobalEvent<TutorialContents
 
     private void OnGameEventReported(EGameEventType type, string id, int value)
     {
+        if (m_Tutorial != null)
+            TryCompleteByEvent(type, id);
+
         var so = SODatabase.FindTutorialByTrigger(type, id);
         if (so == null)
             return;
@@ -107,7 +117,7 @@ public class TutorialContents : IManagableContents, GlobalEvent<TutorialContents
 
     public void TryTrigger(ETutorialID id)
     {
-        if (m_SeenSet.Contains((int)id))
+        if (m_Tutorial != null || m_SeenSet.Contains((int)id))
             return;
 
         var so = SODatabase.GetTutorial(id);
@@ -126,6 +136,14 @@ public class TutorialContents : IManagableContents, GlobalEvent<TutorialContents
         StartTutorial(so);
     }
 
+    public void Abort()
+    {
+        if (m_Tutorial == null)
+            return;
+
+        HideTutorial();
+    }
+
     public void MarkSeen(ETutorialID id)
     {
         if (m_SeenSet.Add((int)id))
@@ -141,28 +159,44 @@ public class TutorialContents : IManagableContents, GlobalEvent<TutorialContents
 
     private void StartTutorial(TutorialSO tutorial)
     {
+        //진행 중 재트리거(ForceTrigger 등) 시 중복 구독을 막는다.
+        UnsubscribeAnchorEvents();
+
         m_Tutorial = tutorial;
         m_StepIndex = 0;
         m_PageIndex = 0;
 
         TutorialClickAnchor.OnAnchorClicked += OnAnchorClickedHandler;
+        TutorialAnchor.OnAnchorAdded += OnAnchorChangedHandler;
+        TutorialAnchor.OnAnchorRemoved += OnAnchorChangedHandler;
 
-        Send(new TutorialContentsParam(TutorialContentsParam.EType.Show, m_Tutorial));
-        TryRefreshOrWaitStep();
+        EnterStep();
     }
 
+    /// <summary>
+    /// 오버레이 클릭(AdvanceArea, 다음 버튼). ClickAnywhere/Pages 스텝에서만 진행한다.
+    /// </summary>
     public void AdvancePage()
     {
-        var step = m_Tutorial.Steps[m_StepIndex];
+        if (m_Tutorial == null || m_IsWaiting)
+            return;
 
-        m_PageIndex++;
-        if (m_PageIndex < step.Pages.Length)
+        var step = CurrentStep;
+        if (step.Advance == ETutorialAdvanceType.Pages)
         {
-            SendRefreshStep();
+            m_PageIndex++;
+            if (m_PageIndex < step.Pages.Length)
+            {
+                SendRefreshStep();
+                return;
+            }
+
+            AdvanceStep();
             return;
         }
 
-        AdvanceStep();
+        if (step.Advance == ETutorialAdvanceType.ClickAnywhere)
+            AdvanceStep();
     }
 
     public void AdvanceStep()
@@ -172,7 +206,7 @@ public class TutorialContents : IManagableContents, GlobalEvent<TutorialContents
 
         if (m_StepIndex < m_Tutorial.Steps.Length)
         {
-            TryRefreshOrWaitStep();
+            EnterStep();
         }
         else
         {
@@ -181,32 +215,47 @@ public class TutorialContents : IManagableContents, GlobalEvent<TutorialContents
         }
     }
 
-    private void TryRefreshOrWaitStep()
+    /// <summary>
+    /// 강조 대상이 화면에 없으면 오버레이를 숨기고 입력을 풀어둔 채 대기한다. 대상이 나타나면 다시 표시한다.
+    /// </summary>
+    private void EnterStep()
     {
-        var step = m_Tutorial.Steps[m_StepIndex];
-        if (TutorialAnchor.IsRegistered(step.AnchorID))
+        var step = CurrentStep;
+        if (step.HasHighlight && TutorialAnchor.Find(step.HighlightAnchor) == null)
         {
-            SendRefreshStep();
+            m_IsWaiting = true;
+            Send(new TutorialContentsParam(TutorialContentsParam.EType.Wait));
             return;
         }
 
-        m_PendingAnchorID = step.AnchorID;
-        TutorialAnchor.OnAnchorRegistered += OnAnchorRegisteredHandler;
+        m_IsWaiting = false;
+        SendRefreshStep();
     }
 
-    private void OnAnchorRegisteredHandler(ETutorialAnchorID id)
+    private void OnAnchorChangedHandler(ETutorialAnchorID id)
     {
-        if (id != m_PendingAnchorID)
+        if (CurrentStep.HighlightAnchor != id)
             return;
 
-        TutorialAnchor.OnAnchorRegistered -= OnAnchorRegisteredHandler;
-        SendRefreshStep();
+        EnterStep();
     }
 
     private void OnAnchorClickedHandler(ETutorialAnchorID id)
     {
-        var step = m_Tutorial.Steps[m_StepIndex];
-        if (!step.UseHoleMesh || step.AnchorID != id)
+        var step = CurrentStep;
+        if (step.Advance != ETutorialAdvanceType.ClickTarget || step.HighlightAnchor != id)
+            return;
+
+        AdvanceStep();
+    }
+
+    private void TryCompleteByEvent(EGameEventType type, string id)
+    {
+        var step = CurrentStep;
+        if (step.Advance != ETutorialAdvanceType.GameEvent || step.CompleteEvent != type)
+            return;
+
+        if (!string.IsNullOrEmpty(step.CompleteParam) && step.CompleteParam != id)
             return;
 
         AdvanceStep();
@@ -214,17 +263,23 @@ public class TutorialContents : IManagableContents, GlobalEvent<TutorialContents
 
     private void SendRefreshStep()
     {
-        var step = m_Tutorial.Steps[m_StepIndex];
-        Send(new TutorialContentsParam(TutorialContentsParam.EType.RefreshStep, m_Tutorial, step, m_PageIndex, m_StepIndex == 0));
+        Send(new TutorialContentsParam(TutorialContentsParam.EType.RefreshStep, CurrentStep, m_PageIndex));
+    }
+
+    private void UnsubscribeAnchorEvents()
+    {
+        TutorialClickAnchor.OnAnchorClicked -= OnAnchorClickedHandler;
+        TutorialAnchor.OnAnchorAdded -= OnAnchorChangedHandler;
+        TutorialAnchor.OnAnchorRemoved -= OnAnchorChangedHandler;
     }
 
     private void HideTutorial()
     {
-        TutorialClickAnchor.OnAnchorClicked -= OnAnchorClickedHandler;
-        TutorialAnchor.OnAnchorRegistered -= OnAnchorRegisteredHandler;
+        UnsubscribeAnchorEvents();
 
         Send(new TutorialContentsParam(TutorialContentsParam.EType.Hide));
         m_Tutorial = null;
+        m_IsWaiting = false;
     }
 
     private void Save()
@@ -236,12 +291,11 @@ public class TutorialContents : IManagableContents, GlobalEvent<TutorialContents
         var data = new TutorialSaveData { Ids = new int[m_SeenSet.Count] };
         m_SeenSet.CopyTo(data.Ids);
 
+        m_IsDataChanged = false;
         SaveManager.Instance.SaveCloudData(GlobalVariable.CONTENTS_TUTORIAL_KEY, data).ContinueWith(success =>
         {
             if (!success)
                 m_IsDataChanged = true;
-
-            m_IsDataChanged = false;
         }).Forget();
     }
 }
