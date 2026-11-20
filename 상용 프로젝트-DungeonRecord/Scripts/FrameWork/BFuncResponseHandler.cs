@@ -13,7 +13,7 @@ public static class BFuncResponseHandler
 
         if (!bro.IsSuccess())
         {
-            EErrorCode code = bro.IsMaintenanceError() ? EErrorCode.ServerMaintenance : EErrorCode.BFuncInvokeFailed;
+            EErrorCode code = BackendErrorHandler.Classify(bro, EErrorCode.BFuncInvokeFailed);
             ErrorReporter.Report(code, context, bro.ToString());
             return null;
         }
@@ -34,6 +34,22 @@ public static class BFuncResponseHandler
         var success = innerJsonData["success"];
         WriteSuccessLog(success, context);
         return success;
+    }
+
+    public static bool IsRetryable(BackendReturnObject bro)
+    {
+        if (!bro.IsSuccess())
+        {
+            EErrorCode code = BackendErrorHandler.Classify(bro, EErrorCode.BFuncInvokeFailed);
+            return code == EErrorCode.NetworkUnstable || code == EErrorCode.ServerBusy;
+        }
+
+        var inner = JsonMapper.ToObject(bro.GetReturnValuetoJSON()["result"].ToString());
+        if (!inner.ContainsKey("error") || !inner["error"].IsObject || !inner["error"].ContainsKey("code"))
+            return false;
+
+        return int.TryParse(inner["error"]["code"].ToString(), out int serverCode)
+            && serverCode == (int)EErrorCode.ServerInternal;
     }
 
     /// <summary>
