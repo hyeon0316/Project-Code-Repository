@@ -23,6 +23,7 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
     private List<DungeonUnit> m_PriorityOrder;
     private DungeonUnit m_CurCharacter;
     private bool m_IsChanging;
+    private bool m_IsActionPhase;
     private DungeonContents m_Contents;
 
     private void Awake()
@@ -55,13 +56,23 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
         if (isResumeBattle)
             SetBattle();
 
-        await UIManager.Instance.PageSystem.GoAsync(Pages_DungeonMainUI.AssetID);
+        await UIManager.Instance.PageSystem.GoAsync(Pages_DungeonMainUI.AssetID, loadingType: ELoadingType.None);
+        UIManager.Instance.SetLoadingUI(ELoadingType.Background, false);
 
     }
 
     private void OnDestroy()
     {
+        SetBattleSpeedActive(false);
         m_Contents.UnRegisterHandler(this);
+    }
+
+    private void SetBattleSpeedActive(bool isActive)
+    {
+        m_IsActionPhase = isActive;
+        Time.timeScale = isActive
+            ? PlayerPrefs.GetFloat(GlobalVariable.PREFS_BATTLE_SPEED_KEY, GlobalVariable.BATTLE_SPEEDS[0])
+            : 1f;
     }
 
     private void SetDungeonTerrain()
@@ -69,7 +80,7 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
         for (int i = m_MapObjContainer.childCount - 1; i >= 0; i--)
             Destroy(m_MapObjContainer.GetChild(i).gameObject);
 
-        var prefabs = m_Contents.CurDungeonData.TerrainPrefabs;
+        var prefabs = m_Contents.DungeonProgress.DungeonData.TerrainPrefabs;
         int index = m_Contents.DungeonProgress.TerrainIndex;
         Instantiate(prefabs[index], m_MapObjContainer);
     }
@@ -84,12 +95,26 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
             m_Contents.DungeonProgress.Battle.DamageRecords.Clear();
             CaptureStageEntrySnapshot();
             SetEnemy();
+            TriggerBattleStartPassives(m_Allies.Concat(m_Enemies));
+            m_Contents.DungeonProgress.Battle.UpdateState(m_Allies, m_DeadAllies, m_Enemies, m_DeadEnemies, m_ReserveEnemies);
+            m_Contents.SaveProgress();
         }
         else
         {
             LoadEnemy();
             LoadActionOrder();
             RestoreEffects();
+        }
+        SortEnemySortingOrder();
+        ShowAllCharacter();
+    }
+
+    private void TriggerBattleStartPassives(IEnumerable<DungeonUnit> units)
+    {
+        foreach (var unit in units)
+        {
+            unit.ResetPassiveTriggerCount();
+            unit.TriggerPassive(EffectTriggerType.OnBattleStart, GetTeam(unit), GetOpponents(unit));
         }
     }
 
@@ -129,18 +154,28 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
     {
         using (new LoadingScope(ELoadingType.Background))
         {
-            //State는 영구 Ally 객체라 오브젝트를 파기해도 스탯 보정이 남으므로 먼저 걷어낸다.
-            foreach (var ally in m_Allies)
-                ally.ClearBattleEffects();
-            foreach (var ally in m_DeadAllies)
-                ally.ClearBattleEffects();
-
             foreach (var ally in m_Allies)
                 Destroy(ally.gameObject);
             foreach (var ally in m_DeadAllies)
                 Destroy(ally.gameObject);
             m_Allies.Clear();
             m_DeadAllies.Clear();
+
+            foreach (var enemy in m_Enemies)
+            {
+                enemy.gameObject.SetActive(false);
+                m_DeadEnemies.Add(enemy);
+            }
+            m_Enemies = null;
+            if (m_ReserveEnemies != null)
+            {
+                foreach (var e in m_ReserveEnemies)
+                {
+                    e.gameObject.SetActive(false);
+                    m_DeadEnemies.Add(e);
+                }
+                m_ReserveEnemies = null;
+            }
 
             var battle = m_Contents.DungeonProgress.Battle;
             battle.AllyRecords.Clear();
@@ -161,23 +196,40 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
             await UniTask.Delay(TimeSpan.FromSeconds(1f));
         }
 
-        m_Contents.Send(new DungeonContentsParam(DungeonContentsParam.EType.SetBattle));
+        m_Contents.Send(new DungeonContentsParam(DungeonContentsParam.EType.RestartBattle));
+    }
+
+    private void RetryDungeon()
+    {
+        foreach (var ally in m_Allies)
+            Destroy(ally.gameObject);
+        foreach (var ally in m_DeadAllies)
+            Destroy(ally.gameObject);
+        m_Allies.Clear();
+        m_DeadAllies.Clear();
+
+        SetMainParty();
+        m_Contents.Send(new DungeonContentsParam(DungeonContentsParam.EType.SetNextMap));
     }
 
     private void SetMainParty()
     {
         var records = m_Contents.DungeonProgress.Battle.AllyRecords;
-        var mainParty = ContentsManager.Instance.Get<PartySettingContents>().PartyInfo.GetMainPartyMembers();
-        for (int i = 0; i < mainParty.Count; i++)
+        var entryParty = m_Contents.DungeonProgress.EntryParty;
+        var party = m_Contents.GetPartyMembers();
+        for (int i = 0; i < party.Count; i++)
         {
             var member = AddressableBundleManager.Instance.AssetInstantiate<AllyUnit>(AllyUnit.AssetID, m_AllyTrs[i]);
-            member.Init(mainParty[i].ToString());
+            member.Init(party[i].ToString());
+            if (entryParty.Count > 0)
+                member.ApplyEntryState(entryParty[i].HpRate, entryParty[i].MpRate);
             member.TransformIndex = i;
+            member.PartyIndex = i;
             m_Allies.Add(member);
             records.Add(new DungeonCharacterRecord(member));
         }
         m_Contents.SaveProgress();
-        m_Contents.SetAllies(m_Allies);
+        m_Contents.SetAllies(m_Allies, m_DeadAllies);
     }
 
     private void LoadMainParty()
@@ -202,12 +254,13 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
             m_DeadAllies.Add(member);
             member.gameObject.SetActive(false);
         }
-        m_Contents.SetAllies(m_Allies);
+        m_Contents.SetAllies(m_Allies, m_DeadAllies);
+        m_Contents.ApplyActiveCards();
     }
 
     private void SetEnemy()
     {
-        var enemyTypes = m_Contents.CurEnemies;
+        var enemyTypes = m_Contents.DungeonProgress.Battle.StageEnemyTypes;
         var records = m_Contents.DungeonProgress.Battle.EnemyRecords;
         if (enemyTypes.Count <= GlobalVariable.PARTY_MEMER_MAX_COUNT)
         {
@@ -347,27 +400,7 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
         m_PriorityOrder.AddRange(m_Allies);
         m_PriorityOrder.AddRange(m_Enemies);
 
-        var originalIndex = new Dictionary<DungeonUnit, int>(m_PriorityOrder.Count);
-        for (int i = 0; i < m_PriorityOrder.Count; i++)
-        {
-            originalIndex[m_PriorityOrder[i]] = i;
-        }
-
-        m_PriorityOrder.Sort((a, b) =>
-        {
-            //speed가 제일 높은 값 우선
-            int speedComparison = b.GetResultSpeed().CompareTo(a.GetResultSpeed());
-            if (speedComparison != 0)
-                return speedComparison;
-
-            //아군과 적이 같은 speed일때 아군 우선
-            int typeComparison = (b is AllyUnit).CompareTo(a is AllyUnit);
-            if (typeComparison != 0)
-                return typeComparison;
-
-            //인덱스가 제일 낮은 값 우선
-            return originalIndex[a].CompareTo(originalIndex[b]);
-        });
+        TurnOrderRule.Sort(m_PriorityOrder);
     }
 
     private async UniTask NextRound()
@@ -384,6 +417,7 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
 
     private async UniTask NextAction()
     {
+        EndTurn();
         if (!DequeueOrder())
         {
             m_Contents.DungeonProgress.Battle.SetPriorityOrder(new List<DungeonUnit>());
@@ -393,7 +427,7 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
             return;
         }
 
-        if (m_CurCharacter.IsDead)
+        if (TurnEntryRule.ResolveEntry(m_CurCharacter) == ETurnEntry.SkipDead)
         {
             await SkipOrder();
             return;
@@ -406,18 +440,16 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
         m_Contents.DungeonProgress.Battle.UpdateState(m_Allies, m_DeadAllies, m_Enemies, m_DeadEnemies, m_ReserveEnemies);
         m_Contents.SaveProgress();
 
-        m_CurCharacter.UpdateEffectStacks();
         await m_CurCharacter.TriggerDot(EffectType.Blight);
-        if (m_CurCharacter.IsDead)
-        {
-            await HandleDotDeath();
-            return;
-        }
 
-        if (m_CurCharacter.IsStun)
+        switch (TurnEntryRule.ResolveAfterDot(m_CurCharacter))
         {
-            await SkipOrder();
-            return;
+            case ETurnEntry.DotDeath:
+                await HandleDotDeath();
+                return;
+            case ETurnEntry.SkipStunned:
+                await SkipOrder();
+                return;
         }
 
         m_Contents.Send(new DungeonContentsParam(DungeonContentsParam.EType.NextAction));
@@ -426,13 +458,15 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
 
         m_Contents.ItemTarget = null;
         m_CurCharacter.SetUsingSkills();
-        if (m_CurCharacter is AllyUnit)
+        if (m_CurCharacter is AllyUnit ally)
         {
+            ally.RestoreMpPercent(GlobalVariable.MP_REGEN_RATE_PER_TURN * (1 + ally.State.MpRegen.ResultValue));
             m_Contents.CurCharacterTransformIndex = m_CurCharacter.TransformIndex;
             var allies = m_Allies.Cast<ISkillTarget>().ToList();
             var enemies = m_Enemies.Cast<ISkillTarget>().ToList();
             m_CurCharacter.TriggerPassive(EffectTriggerType.OnTurnStart, allies, enemies);
             m_CurCharacter.SetHighLight(true);
+            SortEnemySortingOrder();
             CalculateSkillTargets();
             CalculateItemTargets();
             UpdateMoveState(m_CurCharacter.TransformIndex);
@@ -443,6 +477,7 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
         }
         else
         {
+            m_CurCharacter.TriggerPassive(EffectTriggerType.OnTurnStart, GetTeam(m_CurCharacter), GetOpponents(m_CurCharacter));
             ExecuteEnemyPattern().Forget();
         }
     }
@@ -457,23 +492,42 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
         }
     }
 
+    private void SortEnemySortingOrder()
+    {
+        foreach (var enemy in m_Enemies)
+            enemy.SetSortingOrder(GlobalVariable.PARTY_MEMER_MAX_COUNT - 1 - enemy.TransformIndex);
+    }
+
     private void CalculateItemTargets()
     {
         m_Contents.ItemTarget = m_Allies.Find(a => a.TransformIndex == m_CurCharacter.TransformIndex - 1);
     }
 
+    private void EndTurn()
+    {
+        if (m_CurCharacter == null)
+            return;
+
+        TurnEntryRule.ConsumeTurnEndStacks(m_CurCharacter);
+        m_CurCharacter.SetTurn(false);
+        m_CurCharacter = null;
+    }
+
     private bool DequeueOrder()
     {
+        m_CurCharacter?.SetTurn(false);
         if (m_PriorityOrder.Count == 0)
             return false;
 
         m_CurCharacter = m_PriorityOrder[0];
         m_PriorityOrder.RemoveAt(0);
+        m_CurCharacter.SetTurn(true);
         return true;
     }
 
     private void Win()
     {
+        SetBattleSpeedActive(false);
         m_Contents.CanSelectUnitInfo = false;
         //마지막 일격 이후에는 턴이 돌지 않으므로 승리 UI가 읽을 아군 상태를 여기서 갱신한다.
         m_Contents.DungeonProgress.Battle.UpdateState(m_Allies, m_DeadAllies, m_Enemies, m_DeadEnemies, m_ReserveEnemies);
@@ -483,7 +537,12 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
 
     private void Lose()
     {
+        SetBattleSpeedActive(false);
         m_Contents.CanSelectUnitInfo = false;
+        m_CurCharacter.SetTurn(false);
+        m_CurCharacter = null;
+        m_Contents.DungeonProgress.Battle.UpdateState(m_Allies, m_DeadAllies, m_Enemies, m_DeadEnemies, m_ReserveEnemies);
+        m_Contents.SaveProgress();
         m_Contents.Send(new DungeonContentsParam(DungeonContentsParam.EType.Lose));
     }
 
@@ -515,6 +574,7 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
             }
             m_ReserveEnemies = null;
         }
+        m_CurCharacter.SetTurn(false);
         m_CurCharacter = null;
         m_Contents.DungeonProgress.Battle.End();
     }
@@ -539,8 +599,10 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
 
         var allies = m_Allies.Cast<ISkillTarget>().ToList();
         var enemies = m_Enemies.Cast<ISkillTarget>().ToList();
-        m_CurCharacter.TriggerPassive(EffectTriggerType.OnAttack, allies, enemies);
+        m_CurCharacter.ClearCriticalHit();
+        m_CurCharacter.TriggerPassive(EffectTriggerType.OnSkillUse, allies, enemies);
         await ally.ExecuteSkill(skillIndex, targets, m_DungeonCamera);
+        TriggerAfterSkillPassives(m_CurCharacter, targets);
         await CheckEnemy();
     }
 
@@ -629,8 +691,44 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
             await HandleDotDeath();
             return;
         }
+        m_CurCharacter.ClearCriticalHit();
+        m_CurCharacter.TriggerPassive(EffectTriggerType.OnSkillUse, enemies, allies);
         await enemy.ExecutePattern(patternInfo.targets, m_DungeonCamera);
+        TriggerAfterSkillPassives(m_CurCharacter, patternInfo.targets);
         await CheckAlly();
+    }
+
+    private void TriggerAfterSkillPassives(DungeonUnit caster, List<DungeonUnit> targets)
+    {
+        if (caster.IsDead)
+            return;
+
+        var team = GetTeam(caster);
+        var opponents = GetOpponents(caster);
+        caster.TriggerPassive(EffectTriggerType.OnAfterSkill, team, opponents);
+        if (caster.HasCriticalHit)
+            caster.TriggerPassive(EffectTriggerType.OnCritical, team, opponents);
+        if (targets.Exists(t => t.IsAlly != caster.IsAlly && t.IsDead))
+            caster.TriggerPassive(EffectTriggerType.OnKill, team, opponents);
+
+        foreach (var target in targets)
+        {
+            if (target.IsAlly == caster.IsAlly || target.IsDead)
+                continue;
+            target.TriggerPassive(EffectTriggerType.OnDamaged, GetTeam(target), GetOpponents(target));
+        }
+    }
+
+    private List<ISkillTarget> GetTeam(DungeonUnit unit)
+    {
+        var team = unit.IsAlly ? m_Allies : m_Enemies;
+        return team.Cast<ISkillTarget>().ToList();
+    }
+
+    private List<ISkillTarget> GetOpponents(DungeonUnit unit)
+    {
+        var opponents = unit.IsAlly ? m_Enemies : m_Allies;
+        return opponents.Cast<ISkillTarget>().ToList();
     }
 
     private async UniTask AddEnemyToField()
@@ -642,6 +740,7 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
         if (addCount > 0)
         {
             int count = Mathf.Min(addCount, m_ReserveEnemies.Count);
+            var addedEnemies = new List<DungeonUnit>(count);
             for (int i = 0; i < count; i++)
             {
                 var addEnemy = m_ReserveEnemies[0];
@@ -652,29 +751,27 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
                 m_Enemies.Add(addEnemy);
                 m_Contents.HudNewAdded.Invoke(addEnemy);
                 m_ReserveEnemies.RemoveAt(0);
+                addedEnemies.Add(addEnemy);
             }
+            SortEnemySortingOrder();
+            TriggerBattleStartPassives(addedEnemies);
             await UniTask.WaitForSeconds(GlobalVariable.CHARACTER_CHANGING_SPEED + 1f);
         }
     }
 
     private async UniTask CheckCharacters(List<DungeonUnit> characters, List<DungeonUnit> deadCharList,
-    Action onAllDead, Action onSort, Func<UniTask> onAddField = null)
+    Action onAllDead, Action onSort, Func<UniTask> onAddField = null, int reserveCount = 0)
     {
-        var deadCharacters = characters.Where(c => c.IsDead).ToList();
-        if (deadCharacters.Count == 0)
+        var wipeResult = WipeRule.MoveDeadAndCheck(characters, deadCharList, reserveCount);
+        if (wipeResult == EWipeResult.NoDeath)
         {
             NextAction().Forget();
             return;
         }
 
-        foreach (var d in deadCharacters)
+        if (wipeResult == EWipeResult.AllDied)
         {
-            deadCharList.Add(d);
-            characters.Remove(d);
-        }
-
-        if (characters.Count == 0)
-        {
+            await UniTask.WaitForSeconds(GlobalVariable.DURATION_TIME_DEAD_ANIM);
             onAllDead();
             return;
         }
@@ -719,13 +816,8 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
 
     private async UniTask CheckEnemy()
     {
-        bool anyDead = m_Enemies.Exists(c => c.IsDead);
-        if (anyDead)
-        {
-            var allies = m_Allies.Cast<ISkillTarget>().ToList();
-            m_Contents.TriggerCards(EffectTriggerType.OnKill, allies);
-        }
-        await CheckCharacters(m_Enemies, m_DeadEnemies, Win, SortEnemy, AddEnemyToField);
+        int reserveCount = m_ReserveEnemies != null ? m_ReserveEnemies.Count : 0;
+        await CheckCharacters(m_Enemies, m_DeadEnemies, Win, SortEnemy, AddEnemyToField, reserveCount);
     }
 
     private void SortCharacter(List<DungeonUnit> characters, List<Transform> transforms)
@@ -755,6 +847,7 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
     private void SortEnemy()
     {
         SortCharacter(m_Enemies, m_EnemyTrs);
+        SortEnemySortingOrder();
     }
 
     private void ChangeAllyPos(int directionIndex)
@@ -844,13 +937,24 @@ public class BattleController : MonoBehaviour, GlobalEvent<DungeonContentsParam>
             case DungeonContentsParam.EType.RestartStage:
                 _ = RestartStage();
                 break;
+            case DungeonContentsParam.EType.RetryDungeon:
+                RetryDungeon();
+                break;
             case DungeonContentsParam.EType.ExecuteSkill:
                 _ = ExecuteSelectedSkill();
                 break;
             case DungeonContentsParam.EType.UseItem:
                 _ = UseSelectedItem();
                 break;
+            case DungeonContentsParam.EType.SetActionPhase:
+                SetBattleSpeedActive(true);
+                break;
+            case DungeonContentsParam.EType.ChangeBattleSpeed:
+                if (m_IsActionPhase)
+                    SetBattleSpeedActive(true);
+                break;
             case DungeonContentsParam.EType.SetPreparePhase:
+                SetBattleSpeedActive(false);
                 ShowAllCharacter();
                 m_Contents.HudAllShowed.Invoke();
                 m_DungeonCamera.MoveToPreparePhase();

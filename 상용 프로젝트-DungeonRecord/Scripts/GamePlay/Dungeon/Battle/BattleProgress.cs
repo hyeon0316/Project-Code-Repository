@@ -1,4 +1,6 @@
-﻿using System.Collections;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+using System.Collections;
 using System.Collections.Generic;
 
 [System.Serializable]
@@ -6,7 +8,9 @@ public class EffectRecord
 {
     public string EffectID;
     public string CasterID;
+    public string Source;
     public int StackCount;
+    public int RemainingTurns;
     public float ScalingValue;
 
     public EffectRecord()
@@ -17,7 +21,9 @@ public class EffectRecord
     {
         EffectID = effectID;
         StackCount = instance.StackCount;
+        RemainingTurns = instance.RemainingTurns;
         ScalingValue = instance.Context.ScalingValue;
+        Source = instance.Context.Source;
         var caster = instance.Context.Caster as DungeonUnit;
         CasterID = caster != null ? caster.ID : string.Empty;
     }
@@ -27,6 +33,7 @@ public class EffectRecord
 public class DungeonCharacterRecord
 {
     public int TransformIndex;
+    public int PartyIndex;
     public string ID;
     public float Hp;
     public float Mp;
@@ -49,13 +56,15 @@ public class DungeonCharacterRecord
         Hp = character.CurHp;
         Mp = character.CurMp;
         TransformIndex = character.TransformIndex;
+        if (character is AllyUnit ally)
+            PartyIndex = ally.PartyIndex;
         IsStun = character.IsStun;
         StunResistTier = character.StunResistTier;
 
         Effects.Clear();
-        foreach (var kvp in character.Effects)
+        foreach (var instance in character.Effects)
         {
-            Effects.Add(new EffectRecord(kvp.Key, kvp.Value));
+            Effects.Add(new EffectRecord(instance.Effect.EffectID, instance));
         }
     }
 }
@@ -72,6 +81,8 @@ public class BattleProgress
     public List<DungeonCharacterRecord> StageEntryAllyRecords = new(GlobalVariable.PARTY_MEMER_MAX_COUNT);
     /// <summary>스테이지 진입 시점에 이미 사망해 있던 아군. 재시작해도 부활하지 않는다.</summary>
     public List<DungeonCharacterRecord> StageEntryDeadAllyRecords = new(GlobalVariable.PARTY_MEMER_MAX_COUNT);
+    [JsonProperty(ItemConverterType = typeof(StringEnumConverter))]
+    public List<EEnemyType> StageEnemyTypes = new(GlobalVariable.PARTY_LIST_MAX_COUNT);
     /// <summary>아군 ID별 누적 데미지. 전투별 MVP 선정에 쓰인다.</summary>
     public Dictionary<string, float> DamageRecords = new(GlobalVariable.PARTY_MEMER_MAX_COUNT);
     /// <summary>던전 전체 기준 아군 ID별 누적 데미지. 결과 화면 MVP 선정에 쓰인다.</summary>
@@ -156,6 +167,11 @@ public class BattleProgress
         }
     }
 
+    public bool IsLost()
+    {
+        return AllyRecords.Count == 0 && EnemyRecords.Count > 0;
+    }
+
     public void End()
     {
         EnemyRecords.Clear();
@@ -166,6 +182,7 @@ public class BattleProgress
     {
         AllyRecords.Clear();
         EnemyRecords.Clear();
+        StageEnemyTypes.Clear();
         PriorityOrderRecords.Clear();
         DamageRecords.Clear();
         TotalDamageRecords.Clear();
