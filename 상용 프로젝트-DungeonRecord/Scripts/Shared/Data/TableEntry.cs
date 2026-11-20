@@ -31,7 +31,11 @@ public class EffectEntry
     public string EffectID;
     public EffectType EffectType;
     public float Value;
+    /// <summary>지속 턴. 0이면 턴으로 만료되지 않는다.</summary>
+    public int Duration;
+    /// <summary>1회 부여 시 쌓이는 중첩 수. 0이면 중첩을 쓰지 않는다.</summary>
     public int Stack;
+    /// <summary>중첩 상한. 0이면 무제한.</summary>
     public int MaxStack;
     public string DescFormatKey;
 
@@ -44,14 +48,13 @@ public class WeaponGrowthCurveEntry
 {
     public string CurveID;
     public int ModPhase;
-    public int StartLevel;
-    public int EndLevel;
-    public int StartATK;
-    public int EndATK;
+    public int Level;
+    public int BaseATK;
+    public float ATKScale;
     public float ATKPercent;
     public float CRITRate;
     public float DEFPercent;
-    public float EnergyRegen;
+    public float MPRegen;
     public float HPPercent;
     public float MPPercent;
 }
@@ -108,8 +111,9 @@ public class CharacterStatGrowthEntry
 }
 
 [System.Serializable]
-public class CharacterAscensionCostEntry
+public class AscensionCostEntry
 {
+    public EAscensionType Type;
     public string AscensionID;
     public int ModPhase;
     public int ItemID;
@@ -169,15 +173,22 @@ public class WearableSubStatEntry
 }
 
 [System.Serializable]
-public class EquipExpEntry
+public class WearableExpEntry
 {
     public int Level;
-    public int S_ExpToNext;
-    public int S_TotalExp;
-    public int A_ExpToNext;
-    public int A_TotalExp;
-    public int B_ExpToNext;
-    public int B_TotalExp;
+    public ERarityType Rarity;
+    public long ExpToNext;
+    public long TotalExp;
+}
+
+[System.Serializable]
+public class WeaponExpEntry
+{
+    public int Level;
+    public ERarityType Rarity;
+    public int ModPhase;
+    public long ExpToNext;
+    public long TotalExp;
 }
 
 [System.Serializable]
@@ -242,6 +253,18 @@ public class BattlePassSeasonEntry
     public System.DateTime StartDate;
     public System.DateTime EndDate;
     public int CostPerBuyLevel;
+
+    public bool IsOpen(System.DateTime now)
+    {
+        return now >= StartDate && now < EndDate;
+    }
+}
+
+[System.Serializable]
+public class TrialSeasonEntry
+{
+    public int CycleIndex;
+    public string SeasonID;
 }
 
 [System.Serializable]
@@ -254,13 +277,6 @@ public class BattlePassTierEntry
     public int PremiumAmount1;
     public int PremiumReward2;
     public int PremiumAmount2;
-}
-
-[System.Serializable]
-public class QuestRewardEntry
-{
-    public string QuestID;
-    public TransactionItemSpec[] RewardSpecs;
 }
 
 
@@ -288,9 +304,15 @@ public class DungeonRewardEntry
 public class GachaBannerEntry
 {
     public int BannerID;
+    public string Group;
     public System.DateTime StartDate;
     public System.DateTime EndDate;
     public string PickupCharacterID;
+
+    public bool IsOpen(System.DateTime now)
+    {
+        return now >= StartDate && now < EndDate;
+    }
 }
 
 [System.Serializable]

@@ -1,17 +1,10 @@
-using Cysharp.Threading.Tasks;
-
 public class BleedHandler : IDotEffectHandler
 {
-    public void Execute(EffectEntry effect, EffectContext context)
-    {
-        context.Target.ApplyBleed(context, effect);
-    }
+    public bool IsSharedStack { get { return false; } }
 
-    public async UniTask Dot(EffectEntry effect, EffectContext context, int stackCount)
+    /// <summary>고정값 + 시전자 공격력 비례. 스택 수는 데미지에 영향을 주지 않는다.</summary>
+    public float CalcDotDamage(EffectEntry effect, EffectContext context, int stackCount)
     {
-        float damage = effect.Value + context.Caster.GetAttack() * GlobalVariable.BLEED_ATK_RATIO;
-        context.Target.TakeDamage(damage, attacker: context.Caster);
-        context.Target.PlayHit();
-        await UniTask.WaitForSeconds(1);
+        return effect.Value + context.Caster.GetAttack() * GlobalVariable.BLEED_ATK_RATIO;
     }
 }

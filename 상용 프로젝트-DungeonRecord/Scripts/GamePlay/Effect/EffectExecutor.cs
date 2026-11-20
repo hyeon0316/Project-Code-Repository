@@ -1,4 +1,3 @@
-using Cysharp.Threading.Tasks;
 using System.Collections.Generic;
 
 public static class EffectExecutor
@@ -12,6 +11,8 @@ public static class EffectExecutor
         {EffectType.Damage, new DamageHandler()},
         {EffectType.Hp_Recovery_Flat, new HpRecoveryHandler()},
         {EffectType.Hp_Recovery_Percent, new HpRecoveryHandler()},
+        {EffectType.Mp_Recovery_Percent, new MpRecoveryHandler()},
+        {EffectType.Hp_Loss_Percent, new HpLossHandler()},
     };
     private static readonly Dictionary<EffectType, IDotEffectHandler> m_DotHandler = new()
     {
@@ -47,21 +48,32 @@ public static class EffectExecutor
     {
         if (m_TargetHandler.TryGetValue(effect.EffectType, out var targetHandler))
             targetHandler.Execute(effect, context);
-        else if (m_StatusHandler.TryGetValue(effect.EffectType, out var statusHandler))
-            statusHandler.Execute(effect, context);
-        else if (m_DotHandler.TryGetValue(effect.EffectType, out var dotHandler))
-            dotHandler.Execute(effect, context);
+        else if (m_StatusHandler.ContainsKey(effect.EffectType) || m_DotHandler.ContainsKey(effect.EffectType))
+            context.Target.ApplyEffect(context, effect);
     }
 
-    public static async UniTask Dot(EffectEntry effect, EffectContext context, int stackCount)
+    public static void OnApply(EffectInstance instance)
+    {
+        if (m_StatusHandler.TryGetValue(instance.Effect.EffectType, out var handler))
+            handler.OnApply(instance);
+    }
+
+    public static bool IsSharedStack(EffectType type)
+    {
+        return m_DotHandler.TryGetValue(type, out var handler) && handler.IsSharedStack;
+    }
+
+    public static float CalcDotDamage(EffectEntry effect, EffectContext context, int stackCount)
     {
         if (m_DotHandler.TryGetValue(effect.EffectType, out var handler))
-            await handler.Dot(effect, context, stackCount);
+            return handler.CalcDotDamage(effect, context, stackCount);
+
+        return 0f;
     }
 
-    public static void Clear(EffectEntry effect, EffectContext context)
+    public static void OnRemove(EffectInstance instance)
     {
-        if (m_StatusHandler.TryGetValue(effect.EffectType, out var handler))
-            handler.Clear(effect, context);
+        if (m_StatusHandler.TryGetValue(instance.Effect.EffectType, out var handler))
+            handler.OnRemove(instance);
     }
 }

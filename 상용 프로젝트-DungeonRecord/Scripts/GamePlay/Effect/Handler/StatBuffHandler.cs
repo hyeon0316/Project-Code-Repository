@@ -1,19 +1,20 @@
 public class StatBuffHandler : IStatusEffectHandler
 {
-    public void Execute(EffectEntry effect, EffectContext context)
+    /// <summary>같은 효과가 출처별로 여러 개 걸릴 수 있으므로 보정의 source는 인스턴스다.</summary>
+    public void OnApply(EffectInstance instance)
     {
+        var effect = instance.Effect;
         if (!effect.EffectType.TryGetStatType(out var statType))
             return;
 
-        float value = effect.EffectType.IsDebuff() ? -effect.Value : effect.Value;
-        context.Target?.AddStatValue(statType, value, effect, context, effect);
+        instance.Context.Target?.AddStatValue(statType, effect.GetSignedValue(), instance);
     }
 
-    public void Clear(EffectEntry effect, EffectContext context)
+    public void OnRemove(EffectInstance instance)
     {
-        if (!effect.EffectType.TryGetStatType(out var statType))
+        if (!instance.Effect.EffectType.TryGetStatType(out var statType))
             return;
 
-        context.Target?.RemoveStatValue(statType, effect);
+        instance.Context.Target?.RemoveStatValue(statType, instance);
     }
 }
