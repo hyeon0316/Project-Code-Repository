@@ -3,8 +3,8 @@
 ## 프로젝트 소개
 - 개발기간 : 2024/03 ~ 진행중
 - 장르 : 턴제 던전 RPG(3D)
-- 플랫폼 : Mobile (Google Play / iOS 예정)
-- 도구 : Unity, C#, 클라우드 서비스(뒤끝)
+- 플랫폼 : Mobile (AOS / iOS 예정)
+- 도구 : Unity, C#, Cloud Service(뒤끝), AWS Lambda, AWS S3 
 
 ## 프로젝트 인원 및 역할
 - hyeon0316(김현진) : 클라이언트 전체, 서버 펑션, 빌드 파이프라인
