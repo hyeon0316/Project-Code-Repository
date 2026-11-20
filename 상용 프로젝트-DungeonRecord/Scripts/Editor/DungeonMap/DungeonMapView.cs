@@ -12,7 +12,6 @@ public class DungeonMapView : GraphView
 
     public Action<NodeView> OnNodeSelected;
     private DungeonMapTree m_Tree;
-    private List<List<NodeView>> m_NodeViews = new();
 
     public DungeonMapView()
     {
@@ -20,6 +19,7 @@ public class DungeonMapView : GraphView
 
         this.AddManipulator(new ContentZoomer());
         this.AddManipulator(new ContentDragger());
+        this.AddManipulator(new SelectionDragger());
 
         var styleSheet = AssetDatabase.LoadAssetAtPath<StyleSheet>("Assets/Scripts/Editor/DungeonMapEditor.uss");
         styleSheets.Add(styleSheet);
@@ -28,19 +28,30 @@ public class DungeonMapView : GraphView
 
     public override void BuildContextualMenu(ContextualMenuPopulateEvent evt)
     {
+        evt.menu.ClearItems();
+        if (m_Tree == null)
+            return;
+
+        var types = TypeCache.GetTypesDerivedFrom<StageNode>();
         if (evt.target is NodeView nodeView)
         {
-            var types = TypeCache.GetTypesDerivedFrom<StageNode>();
             foreach (var type in types)
             {
-                if (nodeView.Node.GetType() == type)
+                if (nodeView.Node.GetType() == type || !CanUseType(type, nodeView.Node))
                     continue;
                 evt.menu.AppendAction($"Convert to {type.Name}", a => ConvertNode(nodeView, type));
             }
+            evt.menu.AppendSeparator();
+            evt.menu.AppendAction("Delete", a => DeleteNodeView(nodeView));
+            return;
         }
-        else
+
+        Vector2 pos = SnapPosition(contentViewContainer.WorldToLocal(evt.mousePosition), null);
+        foreach (var type in types)
         {
-            evt.menu.ClearItems();
+            if (!CanUseType(type, null))
+                continue;
+            evt.menu.AppendAction($"Create/{type.Name}", a => CreateNode(type, pos));
         }
     }
 
@@ -55,26 +66,9 @@ public class DungeonMapView : GraphView
         DeleteElements(graphElements);
         graphViewChanged += OnGraphViewChanged;
 
-        if (m_NodeViews.Count == 0)
+        foreach (var node in m_Tree.Nodes)
         {
-            for (int i = 0; i < m_Tree.RowCount; i++)
-            {
-                var row = new List<NodeView>();
-                for (int j = 0; j < m_Tree.ColCount; j++)
-                {
-                    row.Add(null);
-                }
-                m_NodeViews.Add(row);
-            }
-        }
-
-        for (int i = 0; i < m_Tree.Nodes.Count; i++)
-        {
-            var node = m_Tree.Nodes[i];
-            var nodeView = CreateNodeView(node, new Vector2(node.ColIndex * GlobalVariable.DUNGEON_MAP_NODE_SPACING,
-                        node.RowIndex * GlobalVariable.DUNGEON_MAP_NODE_SPACING));
-
-            m_NodeViews[node.RowIndex][node.ColIndex] = nodeView;
+            CreateNodeView(node);
         }
 
         foreach (var n in m_Tree.Nodes)
@@ -109,6 +103,12 @@ public class DungeonMapView : GraphView
                     m_Tree.RemoveChild(parentNodeView.Node, childNodeView.Node);
                 }
             });
+
+            graphViewChange.elementsToRemove.ForEach(elem =>
+            {
+                if (elem is NodeView nodeView)
+                    m_Tree.DeleteNode(nodeView.Node);
+            });
         }
 
         if(graphViewChange.edgesToCreate != null)
@@ -126,121 +126,79 @@ public class DungeonMapView : GraphView
 
     public override List<Port> GetCompatiblePorts(Port startPort, NodeAdapter nodeAdapter)
     {
-        return ports.ToList().Where(endPort => 
+        return ports.ToList().Where(endPort =>
         endPort.direction != startPort.direction && endPort.node != startPort.node).ToList();
+    }
+
+    private bool CanUseType(Type type, HNode.Node replacing)
+    {
+        if (type != typeof(StartStageNode))
+            return true;
+
+        return m_Tree.StartNode == null || m_Tree.StartNode == replacing;
+    }
+
+    private void CreateNode(Type type, Vector2 pos)
+    {
+        if (IsOccupied(pos, null))
+        {
+            Debug.LogWarning($"[DungeonMap] 이미 노드가 있는 위치입니다. {pos}");
+            return;
+        }
+
+        var node = m_Tree.CreateNode(type, pos);
+        CreateNodeView(node);
     }
 
     private void ConvertNode(NodeView oldNodeView, System.Type newNodeType)
     {
-        var node = m_Tree.CreateNode(newNodeType, oldNodeView.Node.RowIndex, oldNodeView.Node.ColIndex);
-        CreateNodeView(node, oldNodeView.Node.Position);
+        var node = m_Tree.CreateNode(newNodeType, oldNodeView.Node.Position);
+        CreateNodeView(node);
 
         m_Tree.DeleteNode(oldNodeView.Node);
         RemoveEdges(oldNodeView);
         RemoveElement(oldNodeView);
     }
 
-    public void InitNode(System.Type type, int rowCount, int colCount)
+    private void DeleteNodeView(NodeView nodeView)
     {
-        m_NodeViews.Clear();
-
-        m_Tree.RowCount = rowCount;
-        m_Tree.ColCount = colCount;
-
-        for (int i = 0; i < rowCount; i++)
-        {
-            var nodeViewRow = new List<NodeView>();
-            for (int j = 0; j < colCount; j++)
-            {
-                var node = m_Tree.CreateNode(type, i, j);
-                var nodeView = CreateNodeView(node, 
-                    new Vector2(j * GlobalVariable.DUNGEON_MAP_NODE_SPACING, i * GlobalVariable.DUNGEON_MAP_NODE_SPACING));
-                nodeViewRow.Add(nodeView);
-            }
-            m_NodeViews.Add(nodeViewRow);
-        }
+        var elements = new List<GraphElement>();
+        if (nodeView.Input != null)
+            elements.AddRange(nodeView.Input.connections);
+        if (nodeView.Output != null)
+            elements.AddRange(nodeView.Output.connections);
+        elements.Add(nodeView);
+        DeleteElements(elements);
     }
 
-    private NodeView CreateNodeView(HNode.Node node, Vector2 pos = default)
+    private Vector2 SnapPosition(Vector2 pos, HNode.Node moving)
     {
-        var nodeView = new NodeView(node, pos);
+        float spacing = GlobalVariable.DUNGEON_MAP_NODE_SPACING;
+        var snapped = new Vector2(Mathf.Floor(pos.x / spacing) * spacing, Mathf.Floor(pos.y / spacing) * spacing);
+
+        var start = m_Tree.StartNode;
+        float minX = start != null && start != moving ? start.Position.x : 0f;
+        snapped.x = Mathf.Max(snapped.x, minX);
+
+        if (moving != null && IsOccupied(snapped, moving))
+            return moving.Position;
+
+        return snapped;
+    }
+
+    private bool IsOccupied(Vector2 pos, HNode.Node except)
+    {
+        return m_Tree.Nodes.Any(n => n != except && n.Position == pos);
+    }
+
+    private NodeView CreateNodeView(HNode.Node node)
+    {
+        var nodeView = new NodeView(node);
         nodeView.OnNodeSelected = OnNodeSelected;
+        nodeView.SnapPosition = pos => SnapPosition(pos, node);
         AddElement(nodeView);
 
         return nodeView;
-    }
-
-    public void AddRow()
-    {
-        var newNodeViewRow = new List<NodeView>();
-
-        int rowCount = m_Tree.RowCount;
-        int colCount = m_Tree.ColCount;
-        for (int i = 0; i < colCount; i++)
-        {
-            var node = m_Tree.CreateNode(typeof(PassageNode), rowCount, i);
-            var nodeView = CreateNodeView(node,
-                new Vector2((i * GlobalVariable.DUNGEON_MAP_NODE_SPACING), rowCount * GlobalVariable.DUNGEON_MAP_NODE_SPACING));
-
-            newNodeViewRow.Add(nodeView);
-        }
-
-        m_NodeViews.Add(newNodeViewRow);
-        m_Tree.RowCount++;
-    }
-
-    public void RemoveRow()
-    {
-        int rowCount = m_Tree.RowCount;
-        int colCount = m_Tree.ColCount;
-
-        if (rowCount <= 1) return;
-
-        var lastRow = m_NodeViews[rowCount - 1];
-
-        for (int i = 0; i < lastRow.Count; i++)
-        {
-            RemoveEdges(lastRow[i]);
-            RemoveElement(lastRow[i]);
-            m_Tree.DeleteNode(lastRow[i].Node);
-        }
-
-        m_NodeViews.RemoveAt(rowCount - 1);
-        m_Tree.RowCount--;
-    }
-
-    public void AddColumn()
-    {
-        int rowCount = m_Tree.RowCount;
-        int colCount = m_Tree.ColCount;
-
-        for (int i = 0; i < rowCount; i++)
-        {
-            var node = m_Tree.CreateNode(typeof(PassageNode), i , colCount);
-            var nodeView = CreateNodeView(node,
-                new Vector2(colCount * GlobalVariable.DUNGEON_MAP_NODE_SPACING, i * GlobalVariable.DUNGEON_MAP_NODE_SPACING));
-            m_NodeViews[i].Add(nodeView);
-        }
-
-        m_Tree.ColCount++;
-    }
-
-    public void RemoveColumn()
-    {
-        int rowCount = m_Tree.RowCount;
-        int colCount = m_Tree.ColCount;
-
-        if (colCount <= 1) return;
-
-        for (int i = 0; i < rowCount; i++)
-        {
-            var nodeView = m_NodeViews[i][colCount - 1];
-            m_Tree.DeleteNode(nodeView.Node);
-            RemoveEdges(nodeView);
-            RemoveElement(nodeView);
-            m_NodeViews[i].RemoveAt(colCount - 1);
-        }
-        m_Tree.ColCount--;
     }
 
     private void RemoveEdges(NodeView nodeView)

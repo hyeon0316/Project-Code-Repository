@@ -26,16 +26,19 @@ public static class BDatabase
         "EnemyStatScaleTable",
         "WearableSetsEffectTable",
         "WeaponItemTable",
+        "TrialSeasonTable",
     };
 
     public static Dictionary<string, string> TableIDDic = new();
     public static ItemTable ItemTable = new();
     public static CharacterTable CharacterTable = new();
     public static Dictionary<string, List<ShopEntry>> ShopEntryDic = new();
-    public static BattlePassSeasonEntry BattlePassSeaonEntry;
+    public static List<BattlePassSeasonEntry> BattlePassSeasonEntries = new();
     public static List<BattlePassTierEntry> BattlePassTiers = new();
+    public static List<TrialSeasonEntry> TrialSeasonEntries = new();
     public static Dictionary<string, List<SkillGrowthEntry>> SkillGrowthDic = new();
     public static Dictionary<string, Dictionary<int, List<TransactionItemSpec>>> SkillLevelUpCostDic = new();
+    public static Dictionary<EAscensionType, Dictionary<string, Dictionary<int, List<AscensionCostEntry>>>> AscensionCostDic = new();
     public static Dictionary<string, EffectEntry> EffectDic = new();
     public static Dictionary<EEnemyType, EnemyBaseStatEntry> EnemyBaseStatDic = new();
     public static Dictionary<string, EnemyStatScaleEntry> EnemyStatScaleDic = new();
@@ -48,9 +51,8 @@ public static class BDatabase
     public static Dictionary<string, TransactionItemSpec[]> QuestRewardDic = new();
     public static Dictionary<int, List<DungeonWearableDropEntry>> DungeonWearableDropDic = new();
     public static Dictionary<string, List<DungeonRewardEntry>> DungeonRewardDic = new();
-    public static GachaBannerEntry GachaBannerEntry;
+    public static List<GachaBannerEntry> GachaBannerEntries = new();
     public static GachaRuleEntry GachaRuleEntry;
-    public static List<string> GachaCharacterPool = new();
     public static List<int> GachaAWeaponPool = new();
     public static List<int> GachaBWeaponPool = new();
 
@@ -191,6 +193,7 @@ public static class BDatabase
             entry.EffectID = entryJson["EffectID"].ToString();
             entry.EffectType = Enum.Parse<EffectType>(entryJson["EffectType"].ToString());
             entry.Value = float.Parse(entryJson["Value"].ToString());
+            entry.Duration = int.Parse(entryJson["Duration"].ToString());
             entry.Stack = int.Parse(entryJson["Stack"].ToString());
             entry.MaxStack = int.Parse(entryJson["MaxStack"].ToString());
             entry.DescFormatKey = entryJson["DescFormatKey"].ToString();
@@ -476,35 +479,86 @@ public static class BDatabase
     public static void SetBattlePassSeasonEntry(string json)
     {
         var jsonData = JsonMapper.ToObject(json);
-        if (jsonData.Count == 0)
-            return;
-
-        var d = jsonData[0];
-        BattlePassSeaonEntry = new BattlePassSeasonEntry
+        BattlePassSeasonEntries.Clear();
+        for (int i = 0; i < jsonData.Count; i++)
         {
-            SeasonID = d["SeasonID"].ToString(),
-            WeeklyMaxXp = int.Parse(d["WeeklyMaxXp"].ToString()),
-            XpPerTier = int.Parse(d["XpPerTier"].ToString()),
-            StartDate = DateTime.Parse(d["StartDate"].ToString(), null, System.Globalization.DateTimeStyles.RoundtripKind),
-            EndDate = DateTime.Parse(d["EndDate"].ToString(), null, System.Globalization.DateTimeStyles.RoundtripKind),
-            CostPerBuyLevel = int.Parse(d["CostPerBuyLevel"].ToString()),
-        };
+            var d = jsonData[i];
+            BattlePassSeasonEntries.Add(new BattlePassSeasonEntry
+            {
+                SeasonID = d["SeasonID"].ToString(),
+                WeeklyMaxXp = int.Parse(d["WeeklyMaxXp"].ToString()),
+                XpPerTier = int.Parse(d["XpPerTier"].ToString()),
+                StartDate = DateTime.Parse(d["StartDate"].ToString(), null, System.Globalization.DateTimeStyles.RoundtripKind),
+                EndDate = DateTime.Parse(d["EndDate"].ToString(), null, System.Globalization.DateTimeStyles.RoundtripKind),
+                CostPerBuyLevel = int.Parse(d["CostPerBuyLevel"].ToString()),
+            });
+        }
+    }
+
+    public static BattlePassSeasonEntry GetActiveBattlePassSeason()
+    {
+        DateTime now = BServerTime.Get();
+        foreach (var entry in BattlePassSeasonEntries)
+        {
+            if (entry.IsOpen(now))
+                return entry;
+        }
+        return null;
+    }
+
+    public static void SetTrialSeasonEntry(string json)
+    {
+        var jsonData = JsonMapper.ToObject(json);
+        TrialSeasonEntries.Clear();
+        for (int i = 0; i < jsonData.Count; i++)
+        {
+            var d = jsonData[i];
+            TrialSeasonEntries.Add(new TrialSeasonEntry
+            {
+                CycleIndex = int.Parse(d["CycleIndex"].ToString()),
+                SeasonID = d["SeasonID"].ToString(),
+            });
+        }
+        TrialSeasonEntries.Sort((a, b) => a.CycleIndex.CompareTo(b.CycleIndex));
+    }
+
+    public static string GetTrialSeasonID(int cycleIndex)
+    {
+        string seasonID = null;
+        foreach (var entry in TrialSeasonEntries)
+        {
+            if (entry.CycleIndex > cycleIndex)
+                break;
+            seasonID = entry.SeasonID;
+        }
+        return seasonID;
     }
 
     public static void SetGachaBannerEntry(string json)
     {
         var jsonData = JsonMapper.ToObject(json);
-        if (jsonData.Count == 0)
-            return;
-
-        var d = jsonData[0];
-        GachaBannerEntry = new GachaBannerEntry
+        GachaBannerEntries.Clear();
+        for (int i = 0; i < jsonData.Count; i++)
         {
-            BannerID = int.Parse(d["BannerID"].ToString()),
-            StartDate = DateTime.Parse(d["StartDate"].ToString(), null, System.Globalization.DateTimeStyles.RoundtripKind),
-            EndDate = DateTime.Parse(d["EndDate"].ToString(), null, System.Globalization.DateTimeStyles.RoundtripKind),
-            PickupCharacterID = d["PickupCharacterID"].ToString(),
-        };
+            var d = jsonData[i];
+            GachaBannerEntries.Add(new GachaBannerEntry
+            {
+                BannerID = int.Parse(d["BannerID"].ToString()),
+                Group = d["Group"].ToString(),
+                StartDate = ParseBannerDate(d, "StartDate", DateTime.MinValue),
+                EndDate = ParseBannerDate(d, "EndDate", DateTime.MaxValue),
+                PickupCharacterID = d["PickupCharacterID"].ToString(),
+            });
+        }
+    }
+
+    private static DateTime ParseBannerDate(JsonData d, string key, DateTime emptyValue)
+    {
+        string value = d[key].ToString();
+        if (string.IsNullOrEmpty(value))
+            return emptyValue;
+
+        return DateTime.Parse(value, null, System.Globalization.DateTimeStyles.RoundtripKind);
     }
 
     public static void SetGachaRuleEntry(string json)
@@ -527,14 +581,6 @@ public static class BDatabase
             AWeaponMileageAmount = int.Parse(d["AWeaponMileageAmount"].ToString()),
             WeaponPityMax = int.Parse(d["WeaponPityMax"].ToString()),
         };
-    }
-
-    public static void SetGachaCharacterPoolEntry(string json)
-    {
-        var jsonData = JsonMapper.ToObject(json);
-        GachaCharacterPool.Clear();
-        for (int i = 0; i < jsonData.Count; i++)
-            GachaCharacterPool.Add(jsonData[i]["CharacterID"].ToString());
     }
 
     public static void SetGachaAWeaponPoolEntry(string json)
@@ -573,6 +619,39 @@ public static class BDatabase
         BattlePassTiers.Sort((a, b) => a.Tier.CompareTo(b.Tier));
     }
 
+    public static void SetAscensionCostEntry(string json)
+    {
+        AscensionCostDic = new Dictionary<EAscensionType, Dictionary<string, Dictionary<int, List<AscensionCostEntry>>>>();
+        foreach (EAscensionType type in Enum.GetValues(typeof(EAscensionType)))
+            AscensionCostDic[type] = new Dictionary<string, Dictionary<int, List<AscensionCostEntry>>>();
+
+        var jsonData = JsonMapper.ToObject(json);
+        for (int i = 0; i < jsonData.Count; i++)
+        {
+            var entry = new AscensionCostEntry();
+            entry.Type = Enum.Parse<EAscensionType>(jsonData[i]["Type"].ToString());
+            entry.AscensionID = jsonData[i]["AscensionID"].ToString();
+            entry.ModPhase = int.Parse(jsonData[i]["ModPhase"].ToString());
+            entry.ItemID = int.Parse(jsonData[i]["ItemID"].ToString());
+            entry.Amount = int.Parse(jsonData[i]["Amount"].ToString());
+
+            var idDic = AscensionCostDic[entry.Type];
+            if (!idDic.TryGetValue(entry.AscensionID, out var phaseDic))
+            {
+                phaseDic = new Dictionary<int, List<AscensionCostEntry>>();
+                idDic[entry.AscensionID] = phaseDic;
+            }
+
+            if (!phaseDic.TryGetValue(entry.ModPhase, out var list))
+            {
+                list = new List<AscensionCostEntry>();
+                phaseDic[entry.ModPhase] = list;
+            }
+
+            list.Add(entry);
+        }
+    }
+
     private static int ParseIntOrZero(string s)
     {
         return int.TryParse(s, out var v) ? v : 0;
@@ -606,6 +685,19 @@ public static class BDatabase
         return new List<TransactionItemSpec>();
     }
 
+    public static IReadOnlyList<AscensionCostEntry> GetAscensionCost(EAscensionType type, string ascensionID, int modPhase)
+    {
+        if (AscensionCostDic.TryGetValue(type, out var idDic) && idDic.TryGetValue(ascensionID, out var phaseDic))
+        {
+            if (phaseDic.TryGetValue(modPhase, out var list))
+                return list;
+            HDebug.LogError($"Failed to find ascension cost modPhase. type={type} ascensionID={ascensionID} modPhase={modPhase}");
+            return null;
+        }
+        HDebug.LogError($"Failed to find ascension cost. type={type} ascensionID={ascensionID}");
+        return null;
+    }
+
     public static IReadOnlyList<LevelRewardEntry> GetLevelRewards(int level)
     {
         if (LevelRewardDic.TryGetValue(level, out var list))
@@ -628,9 +720,7 @@ public static class BDatabase
         if (!EffectDic.TryGetValue(effectID, out var effect))
             return string.Empty;
 
-        return string.Format(effect.DescFormat,
-            effect.GetDisplayValue(),
-            effect.Stack);
+        return effect.GetDescription();
     }
 
     public static InventoryConfigEntry GetInventoryConfig(string id)

@@ -5,15 +5,16 @@ using UnityEngine.UIElements;
 
 public class DungeonMapEditor : EditorWindow
 {
+    private const string SAVE_FOLDER_PREFSNAME = "DungeonMapSaveFolder";
+    private const string DEFAULT_SAVE_FOLDER = "Assets/SO/Dungeon";
+
     [SerializeField] private VisualTreeAsset m_VisualTreeAsset = default;
 
     private DungeonMapView m_MapView;
     private InspectorView m_InspectorView;
-    private IntegerField m_RowsField;
-    private IntegerField m_ColumnsField;
     private TextField m_AssetNameField;
+    private TextField m_SaveFolderField;
     private DungeonMapTree m_SelectedTree;
-    private VisualElement m_EditButtonParent;
     private Label m_NodeViewLabel;
 
     [MenuItem("Tools/DungeonMapEditor")]
@@ -35,42 +36,70 @@ public class DungeonMapEditor : EditorWindow
         m_MapView = root.Q<DungeonMapView>();
         m_MapView.OnNodeSelected = OnNodeSelectionChanged;
         m_InspectorView = root.Q<InspectorView>();
-        m_RowsField = root.Q<IntegerField>("RowsField");
-        m_ColumnsField = root.Q<IntegerField>("ColumnsField");
         m_AssetNameField = root.Q<TextField>("AssetNameField");
-        m_EditButtonParent = root.Q<VisualElement>("EditButtons");
-        m_EditButtonParent.style.display = DisplayStyle.None;
+        m_SaveFolderField = root.Q<TextField>("SaveFolderField");
+        m_SaveFolderField.isReadOnly = true;
+        m_SaveFolderField.value = EditorPrefs.GetString(SAVE_FOLDER_PREFSNAME, DEFAULT_SAVE_FOLDER);
         m_NodeViewLabel = root.Q<Label>("NodeViewLabel");
         m_NodeViewLabel.text = "Node View";
 
         var toolbarMenu = root.Q<ToolbarMenu>("ToolbarMenu");
         PopulateToolbarMenu(toolbarMenu);
 
+        root.Q<Button>("SelectFolderButton").clicked += SelectSaveFolder;
+
         root.Q<Button>("GenerateButton").clicked += () =>
         {
+            string folder = m_SaveFolderField.value;
+            string assetName = m_AssetNameField.value;
+            if (string.IsNullOrEmpty(assetName) || !AssetDatabase.IsValidFolder(folder))
+            {
+                Debug.LogError($"[DungeonMap] Invalid asset name or folder. name: {assetName}, folder: {folder}");
+                return;
+            }
+
+            string path = $"{folder}/{assetName}.asset";
+            if (AssetDatabase.LoadAssetAtPath<Object>(path) != null)
+            {
+                Debug.LogError($"[DungeonMap] Asset already exists. {path}");
+                return;
+            }
+
             //TODO: 여기에 다른 타입의 Tree추가 고려
             var tree = ScriptableObject.CreateInstance<DungeonMapTree>();
-            m_MapView.PopulateView(tree);
-            AssetDatabase.CreateAsset(tree, $"Assets/SO/Dungeon/Map/{m_AssetNameField.value}.asset");
-            AssetDatabase.SaveAssets();
+            AssetDatabase.CreateAsset(tree, path);
+            tree.CreateNode(typeof(StartStageNode), Vector2.zero);
 
-            m_MapView.InitNode(typeof(PassageNode), m_RowsField.value, m_ColumnsField.value);
+            SetMapView(tree);
             PopulateToolbarMenu(toolbarMenu);
-            m_EditButtonParent.style.display = DisplayStyle.Flex;
         };
 
-        root.Q<Button>("AddRow").clicked += () => { m_MapView.AddRow(); };
-        root.Q<Button>("RemoveRow").clicked += () => { m_MapView.RemoveRow(); };
-        root.Q<Button>("AddColumn").clicked += () => { m_MapView.AddColumn(); };
-        root.Q<Button>("RemoveColumn").clicked += () => { m_MapView.RemoveColumn(); };
         OnSelectionChange();
+    }
+
+    private void SelectSaveFolder()
+    {
+        string selected = EditorUtility.OpenFolderPanel("Select Folder to save DungeonMapTree", m_SaveFolderField.value, "");
+        if (string.IsNullOrEmpty(selected))
+            return;
+
+        string projectRoot = Application.dataPath.Substring(0, Application.dataPath.Length - "Assets".Length);
+        selected = selected.Replace('\\', '/');
+        if (selected != Application.dataPath && !selected.StartsWith(Application.dataPath + "/"))
+        {
+            Debug.LogError($"[DungeonMap] Folder must be inside Assets. {selected}");
+            return;
+        }
+
+        m_SaveFolderField.value = selected.Substring(projectRoot.Length);
+        EditorPrefs.SetString(SAVE_FOLDER_PREFSNAME, m_SaveFolderField.value);
     }
 
     private void PopulateToolbarMenu(ToolbarMenu menu)
     {
         menu.menu.ClearItems();
 
-        string[] guids = AssetDatabase.FindAssets("t:DungeonMapTree", new string[] { "Assets/SO/Dungeon/Tree" });
+        string[] guids = AssetDatabase.FindAssets("t:DungeonMapTree", new string[] { "Assets/SO/Dungeon" });
         foreach (var guid in guids)
         {
             string path = AssetDatabase.GUIDToAssetPath(guid);
@@ -100,7 +129,6 @@ public class DungeonMapEditor : EditorWindow
     private void SetMapView(DungeonMapTree tree)
     {
         m_MapView.PopulateView(tree);
-        m_EditButtonParent.style.display = DisplayStyle.Flex;
         m_NodeViewLabel.text = $"Node View - {tree.name}";
     }
 

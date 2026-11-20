@@ -7,16 +7,17 @@ using UnityEditor.Experimental.GraphView;
 public class NodeView : UnityEditor.Experimental.GraphView.Node
 {
     public Action<NodeView> OnNodeSelected;
+    public Func<Vector2, Vector2> SnapPosition;
     public HNode.Node Node;
     public Port Input;
     public Port Output;
 
-    public NodeView(HNode.Node node ,Vector2 pos = default)
+    public NodeView(HNode.Node node)
     {
         Node = node;
         this.title = node.name;
         this.viewDataKey = node.GUID;
-        SetPosition(new Rect(pos == default ? node.Position : pos, Vector2.zero));
+        SetPosition(new Rect(node.Position, Vector2.zero));
 
         CreateInputPorts();
         CreateOutputPorts();
@@ -59,8 +60,14 @@ public class NodeView : UnityEditor.Experimental.GraphView.Node
 
     public override void SetPosition(Rect newPos)
     {
+        if (SnapPosition != null)
+            newPos.position = SnapPosition(newPos.position);
+
         base.SetPosition(newPos);
-        Node.Position.x = newPos.xMin;
-        Node.Position.y = newPos.yMin;
+        if (Node.Position == newPos.position)
+            return;
+
+        Node.Position = newPos.position;
+        UnityEditor.EditorUtility.SetDirty(Node);
     }
 }
