@@ -4,7 +4,7 @@
 - 개발기간 : 2024/03 ~ 진행중
 - 장르 : 턴제 던전 RPG(3D, 횡 스크롤)
 - 플랫폼 : Mobile (AOS / iOS 예정)
-- 도구 : Unity, C#, Cloud Service(뒤끝), AWS Lambda, AWS S3 
+- 도구 : Unity, C#, UniTask, Addressable, Cloud Service(뒤끝), AWS Lambda, AWS S3, Github Actions 
 - 인원 : 1인
 
 ## 핵심 요약
