@@ -4,7 +4,7 @@
 - 기간 : 2022/09/19 ~ 2022/11/15
 - 장르 : 미니 RPG(3D)
 - 플랫폼 : Mobile
-- 도구 : Unity, C#
+- 도구 : Unity, C#, UniTask, JobSystem + Burst
 - 인원 : 2인 (프로그래머 2)
 
 ## 프로젝트 인원 및 역할
@@ -97,7 +97,139 @@ https://github.com/hyeon0316/Project-Code-Repository/blob/39abf628f085efb57039ab
 | 구역 경계에서 반복 전환 | 경계에 서 있으면 트리거가 반복 발생해 스폰과 반환이 되풀이됨 | 지연 시간을 두거나 이력 처리 |
 | 구역 진입 시 일괄 생성 | 적을 한 번에 꺼내 순간적인 부하가 발생할 수 있음 | 여러 프레임에 나눠 생성 |
 | 컬링 기준이 구역 단위 | 같은 구역 안에서는 멀리 있는 적도 전부 갱신됨 | 거리 기준 LOD 또는 갱신 주기 분산 |
-| GPU 인스턴싱 미적용 | 같은 적이 다수 등장하는 구조에 적합 | 적 렌더러에 인스턴싱 적용 |
+| GPU 인스턴싱 미적용 | 같은 적이 다수 등장하는 구조에 적합 | 적 렌더러에 인스턴싱 적용 ([대량 몬스터 처리](#대량-몬스터-처리) 참고) |
+
+<br></br>
+
+### 대량 몬스터 처리
+
+구역 단위 활성화로 동시에 존재하는 적 수는 줄었지만, 적 한 마리가 GameObject 계층과 여러 컴포넌트, 비동기 패턴 루프를 각각 들고 있는 구조 자체는 그대로임.
+같은 행동 패턴(대기·배회·추적·공격·복귀)을 유지한 채 **5000마리**를 처리하는 구조를 별도 벤치마크 씬에서 구현함.
+기존 방식과 같은 상태 머신을 개체별 `Update` + `NavMeshAgent`로 만든 비교용 구현(`OopEnemyBaseline`)을 두고, 개선안마다 토글로 A/B 비교함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/OopEnemyBaseline.cs#L28-L99
+
+<img width="400" height="400" alt="MassEnemyBenchmark" src="Images/MassEnemyBenchmark.gif" />
+
+- 원본
+
+기존 `Enemy`는 개체마다 `NavMeshAgent`, `Animator`, `Rigidbody`와 UniTask 패턴 루프 3개를 가짐.
+객체가 힙에 흩어져 있어 매 프레임 순회할 때 캐시 미스가 많고, 거리 계산과 상태 판단이 모두 메인 스레드에서만 수행됨.
+
+- 수정
+
+**1. 필드별 NativeArray(SoA) + Burst Job**
+
+위치·회전·상태·HP·타이머를 각각 연속 배열로 두고, 상태 머신은 `IJobParallelFor`로 병렬 처리함.
+모든 데이터가 blittable struct이고 할당은 시작 시 한 번뿐이라 프레임 중 GC 할당이 없음.
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/JobEnemyManager.cs#L96-L107
+
+위치 배열은 이웃 탐색용으로 읽기만 하고, 이동 결과는 `DesiredPositions`에 따로 씀.
+같은 Job 안에서 이웃의 이번 프레임 값과 지난 프레임 값이 섞여 읽히지 않음.
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/Jobs/EnemyAIJob.cs#L41-L169
+
+**2. Job 의존성 체인**
+
+`Update`에서 스케줄하고 `LateUpdate`에서 `Complete`함. 그 사이 메인 스레드가 다른 `Update`를 처리하는 동안 워커 스레드가 Job을 실행함.
+애니메이션 상태 계산은 위치 보정과 무관하므로 `NavConstrainJob`과 병렬로 돌고, `CombineDependencies`로 합침.
+```
+공간 해시 ─┐
+추적 필드 ─┴→ EnemyAIJob → NavConstrainJob ─┐
+                     └→ AnimStateJob ───────┴→ BuildMatricesJob → CullInstancesJob
+LateUpdate: Complete → 사망 개체 리스폰 → Draw
+```
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/JobEnemyManager.cs#L160-L323
+
+**3. Flow Field로 길찾기 공유**
+
+개체마다 경로를 구하는 방식은 비용이 몬스터 수에 비례함.
+Flow Field는 목표 칸에서 격자 전체로 누적 거리를 한 번 퍼뜨리고 칸마다 이동 방향을 기록하므로, 비용이 칸 수에만 비례하고 몬스터 수와 무관함.
+추적 필드 1장(목표: 플레이어)과 스폰 영역별 복귀 필드를 두고, 추적 필드는 플레이어가 다른 칸으로 옮겼을 때만 다시 계산함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/Jobs/IntegrationFieldJob.cs#L20-L56
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/Jobs/DirectionFieldJob.cs#L22-L42
+
+직선 비용 10, 대각선 14로 정수 계산하고, 대각선은 인접한 두 직선 칸이 모두 걸을 수 있을 때만 허용해 벽 모서리를 파고들지 않게 함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/Jobs/IntegrationFieldJob.cs#L46
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/FlowField.cs#L115-L130
+칸 단위 오차와 지형 높이는 `NavMeshQuery.MoveLocations`로 NavMesh 표면에 맞춰 보정함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/Jobs/NavConstrainJob.cs#L20-L27
+
+몬스터끼리 겹치지 않게 하는 분리 처리는 공간 해시로 자기 셀과 주변 3×3 셀만 비교함. 전체 쌍 비교(5000마리 기준 2500만 회) 대신 이웃 수에만 비례함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/Jobs/EnemyAIJob.cs#L193-L221
+
+**4. 병목 재확인: 로직이 아니라 렌더링**
+
+로직을 Job으로 옮긴 뒤 PlayerLoop는 26.0ms → 17.2ms로 줄었지만 FPS는 18.8 → 21.7에 그침.
+Profiler에서 `NavMeshManager`(7.45ms)와 개체별 `Update`(2.4ms)는 메인 스레드에서 빠졌으나, 스키닝(`MeshSkinning.Update`) 11.3ms가 두 구현 모두 그대로 남아 있었음.
+적 프리팹이 `SkinnedMeshRenderer`(본 31개) + GameObject 44개 계층이라, 5000마리면 스키닝 5000번, Draw Call 5000개, Transform 22만 개가 두 방식에 똑같이 붙어 AI 처리 차이를 덮고 있었음.
+`SkinnedMeshRenderer`는 배칭과 GPU 인스턴싱이 되지 않아 머티리얼 설정만으로는 해결되지 않으므로, 개체 GameObject 자체를 없앰.
+
+**5. GPU 인스턴싱 한 번으로 그리기**
+
+시작할 때 프리팹의 기본 포즈를 `BakeMesh`로 정적 메시로 굽고, 개체마다 행렬과 애니메이션 파라미터(80B)를 Job에서 만들어 `DrawMeshInstancedProcedural` 한 번으로 그림.
+`StructuredBuffer`에서 인스턴스 데이터를 읽으므로 호출당 1023개 제한이 없음. 인스턴싱을 지원하지 않는 기기는 Transform 방식으로 그림.
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/InstancedEnemyRenderer.cs#L27-L84
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/Jobs/BuildMatricesJob.cs#L18-L25
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/Jobs/ApplyTransformJob.cs
+
+**6. VAT 애니메이션**
+
+Animator와 본 없이 애니메이션을 재생하기 위해, 클립의 프레임마다 스키닝된 정점 위치와 노멀을 텍스처에 미리 구움.
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/Editor/VatBaker.cs#L88-L115
+Vertex Shader가 `SV_VertexID`로 현재·다음 프레임의 정점을 읽어 보간하므로, 샘플링 FPS보다 부드럽게 재생됨.
+상태 → 클립 매핑(Idle / Walk / Attack)은 Job에서 계산함.
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/Shaders/InstancedEnemyVat.shader#L87-L116
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/Jobs/AnimStateJob.cs#L22-L48
+
+**7. 개체 단위 절두체 컬링**
+
+Unity 기본 컬링은 Draw 호출 단위로 판정하므로, 격자 전체를 덮는 bounds 하나로 그리는 인스턴싱 호출은 항상 "보임"이 됨.
+행렬을 만든 직후 Burst Job에서 개체마다 경계구를 카메라 절두체 평면 6개와 비교해, 보이는 개체만 `NativeList`에 모아 그 개수만큼 업로드하고 그림.
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/Jobs/CullInstancesJob.cs#L18-L29
+
+**8. 길찾기 큐 A/B 측정**
+
+누적 거리 계산을 FIFO 큐와 이진 힙(다익스트라) 두 가지로 구현하고 토글로 비교함.
+100×100 격자, Profile Analyzer 중간값 기준.
+
+| | FIFO | 이진 힙 |
+|---|---|---|
+| Integration Job | **0.319ms** | 0.718ms |
+| 셀 확장 횟수 (추적 필드) | 9984 | 9903 |
+
+힙은 셀마다 정확히 한 번 확장하지만, FIFO의 추가 확장은 0.8%뿐임.
+FIFO는 큐에서 꺼낼 때 그 시점의 최신 거리 값으로 확장하고, 열린 격자에서는 최단 경로가 대부분 칸 수가 가장 적은 경로라 재확장이 거의 생기지 않음.
+반면 힙은 꺼낼 때마다 sift-down 비용이 들어 셀 하나를 처리하는 비용이 2배 이상 큼. 그래서 기본값은 FIFO로 두고, 크게 돌아가야 하는 지형에서 다시 비교할 수 있도록 힙은 토글로 남김.
+https://github.com/hyeon0316/Project-Code-Repository/blob/6624aa47975fceadfaa5c642b4bfdfbffda257fc/2022-GstarProject/Scripts/Test/Jobs/IntegrationFieldHeapJob.cs
+
+처음 측정에서는 힙이 더 빠르게 나왔음. 에디터의 Burst 비동기 컴파일 때문에 컴파일이 끝나기 전의 Job이 일반 C#으로 실행된 값이었음.
+Synchronous Compilation을 켜고, 비교할 단계만 분리해 재고, 시간과 함께 매번 같게 나오는 작업량 지표(확장 횟수)를 기록하는 것으로 측정 규칙을 정함.
+
+- 결과
+
+| | 원본 | 수정 |
+|---|---|---|
+| 개체 표현 | GameObject 44개 계층 + 컴포넌트 | NativeArray 원소 |
+| AI 처리 | 개체별 루프, 메인 스레드 | Burst Job 병렬 |
+| 길찾기 | 개체마다 NavMeshAgent 경로 계산 | Flow Field 공유 (추적 1장 + 영역별 복귀) |
+| 몬스터 Draw Call | 개체 수만큼 | 1회 |
+| 애니메이션 | Animator + 스키닝 | VAT (텍스처 읽기) |
+| 컬링 | Renderer 단위 | 개체 단위 (Job) |
+
+5000마리, Unity Editor, Profile Analyzer 300프레임 중간값.
+FPS는 에디터 오버헤드(EditorLoop)가 포함된 값이므로 비교 기준은 PlayerLoop로 둠.
+
+| 구성 | 카메라 | PlayerLoop | FPS |
+|---|---|---|---|
+| 비교용 구현 (개체별 Update + NavMeshAgent) | 구역 1개 | 26.0ms | 18.8 |
+| Job + Transform | 구역 1개 | 17.2ms | 21.7 |
+| Job + 인스턴싱 (정적 메시) | 전체 | 5.1ms | 71.4 |
+| Job + 인스턴싱 + VAT | 전체 | 5.0ms | 68.3 |
+| Job + 인스턴싱 + VAT | 구역 1개 | 5.1ms | 81.9 |
+| Job + 인스턴싱 + VAT + 컬링 | 구역 1개 | **2.1ms** | **172.0** |
+
+- VAT는 정적 메시 대비 비용 차이가 측정 오차 수준이며, 상태 → 클립 계산(`AnimStateJob`)은 워커 스레드에서 0.31ms
+- 컬링을 끄면 화면 밖 개체도 정점 처리를 거쳐 메인 스레드가 GPU를 2.65ms 기다림. 컬링을 켜면 대기가 사라지고 컬링 Job 비용은 0.35ms
+
 
 <br></br>
 
