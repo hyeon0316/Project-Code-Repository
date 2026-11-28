@@ -1,5 +1,7 @@
 # DungeonRecord
 
+구글 플레이 링크 : https://play.google.com/store/apps/details?id=com.HyeonStudio.GooglePlay_UpcomingReleases
+
 ## 프로젝트 소개
 - 개발기간 : 2024/03 ~ 진행중
 - 장르 : 턴제 던전 RPG(3D, 횡 스크롤)
